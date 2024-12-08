@@ -13,11 +13,11 @@ import {
 import { reactInvitationEmail } from "./email/invitation";
 import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
-import { createPool } from "mysql2/promise";
 import { nextCookies } from "better-auth/next-js";
 import { addAccountToSession } from "./plugin";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { PrismaClient } from "@prisma/client";
+import { ac, owner as ownerRole, admin as adminRole, member as memberRole, myCustomRole } from "@/lib/permissions";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -119,6 +119,13 @@ export const auth = betterAuth({
 				});
 				console.log(res, data.email);
 			},
+			ac: ac,
+			roles: {
+				owner: ownerRole,
+				admin: adminRole,
+				member: memberRole,
+				myCustomRole
+			}
 		}),
 		twoFactor({
 			otpOptions: {
