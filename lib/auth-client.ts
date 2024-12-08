@@ -7,11 +7,20 @@ import {
 	multiSessionClient,
 	oneTapClient,
 } from "better-auth/client/plugins";
+import { ac, owner as ownerRole, admin as adminRole, member as memberRole, myCustomRole } from "@/lib/permissions"
 import { toast } from "sonner";
 
 export const client = createAuthClient({
 	plugins: [
-		organizationClient(),
+		organizationClient({
+			ac: ac,
+			roles: {
+				owner: ownerRole,
+				admin: adminRole,
+				member: memberRole,
+				myCustomRole
+			}
+		}),
 		twoFactorClient({
 			onTwoFactorRedirect() {
 				window.location.href = "/two-factor";
