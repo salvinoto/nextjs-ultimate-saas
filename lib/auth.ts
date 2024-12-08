@@ -11,38 +11,24 @@ import {
 	openAPI,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
-import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
-import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { nextCookies } from "better-auth/next-js";
 import { addAccountToSession } from "./plugin";
+import { prismaAdapter } from "better-auth/adapters/prisma";
+import { PrismaClient } from "@prisma/client";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
 
-const libsql = new LibsqlDialect({
-	url: process.env.TURSO_DATABASE_URL || "",
-	authToken: process.env.TURSO_AUTH_TOKEN || "",
-});
-
-const mysql = process.env.USE_MYSQL
-	? new MysqlDialect(createPool(process.env.MYSQL_DATABASE_URL || ""))
-	: null;
-
-const dialect = process.env.USE_MYSQL ? mysql : libsql;
-
-if (!dialect) {
-	throw new Error("No dialect found");
-}
+const prisma = new PrismaClient();
 
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
-	database: {
-		dialect,
-		type: process.env.USE_MYSQL ? "mysql" : "sqlite",
-	},
+	database: prismaAdapter(prisma, {
+		provider: "postgresql",
+	}),
 	session: {
 		cookieCache: {
 			enabled: true,
@@ -126,10 +112,9 @@ export const auth = betterAuth({
 						inviteLink:
 							process.env.NODE_ENV === "development"
 								? `http://localhost:3000/accept-invitation/${data.id}`
-								: `${
-										process.env.BETTER_AUTH_URL ||
-										"https://demo.better-auth.com"
-									}/accept-invitation/${data.id}`,
+								: `${process.env.BETTER_AUTH_URL ||
+								"https://demo.better-auth.com"
+								}/accept-invitation/${data.id}`,
 					}),
 				});
 				console.log(res, data.email);
