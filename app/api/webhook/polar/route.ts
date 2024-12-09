@@ -1,3 +1,4 @@
+import { handleSubscription } from "@/lib/payments";
 import {
 	validateEvent,
 	WebhookVerificationError,
@@ -40,22 +41,27 @@ export async function POST(request: NextRequest) {
 
 		// Subscription has been created
 		case "subscription.created":
+			await handleSubscription(webhookPayload);
 			break;
 
 		// A catch-all case to handle all subscription webhook events
 		case "subscription.updated":
+			await handleSubscription(webhookPayload);
 			break;
 
 		// Subscription has been activated
 		case "subscription.active":
+			await handleSubscription(webhookPayload);
 			break;
 
 		// Subscription has been revoked/peroid has ended with no renewal
 		case "subscription.revoked":
+			await handleSubscription(webhookPayload);
 			break;
 
 		// Subscription has been explicitly canceled by the user
 		case "subscription.canceled":
+			await handleSubscription(webhookPayload);
 			break;
 
 		default:

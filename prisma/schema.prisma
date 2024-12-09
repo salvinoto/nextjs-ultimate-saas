@@ -15,7 +15,7 @@ datasource db {
 }
 
 model User {
-  id               String       @id
+  id               String         @id
   name             String
   email            String
   emailVerified    Boolean
@@ -33,6 +33,7 @@ model User {
   invitations      Invitation[]
   twofactors       TwoFactor[]
   passkeys         Passkey[]
+  Subscription     Subscription[]
 
   @@unique([email])
   @@map("user")
@@ -87,14 +88,15 @@ model Verification {
 }
 
 model Organization {
-  id          String       @id
-  name        String
-  slug        String?
-  logo        String?
-  createdAt   DateTime
-  metadata    String?
-  members     Member[]
-  invitations Invitation[]
+  id           String         @id
+  name         String
+  slug         String?
+  logo         String?
+  createdAt    DateTime
+  metadata     String?
+  members      Member[]
+  invitations  Invitation[]
+  Subscription Subscription[]
 
   @@unique([slug])
   @@map("organization")
@@ -150,4 +152,86 @@ model Passkey {
   createdAt      DateTime?
 
   @@map("passkey")
+}
+
+model Subscription {
+  id                 String        @id
+  createdAt          DateTime
+  modifiedAt         DateTime
+  userId             String?
+  user               User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId     String?
+  organization       Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  amount             Int
+  currency           String
+  recurringInterval  String
+  status             String
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd  Boolean
+  startedAt          DateTime
+  endedAt            DateTime?
+  productId          String?
+  product            Product?      @relation(fields: [productId], references: [id])
+  priceId            String?
+  discountId         String?
+  checkoutId         String?
+  metadata           Json?
+  customFieldData    Json?
+
+  @@map("subscription")
+}
+
+// The Product references Polar's organization via polarOrganizationId.
+// It does not necessarily map to your internal Organization model.
+model Product {
+  id                   String         @id
+  createdAt            DateTime
+  modifiedAt           DateTime
+  name                 String
+  description          String
+  isRecurring          Boolean
+  isArchived           Boolean
+  polarOrganizationId  String // ID from Polar's data
+  metadata             Json?
+  prices               Price[]
+  benefits             Benefit[]
+  attachedCustomFields Json?
+  Subscription         Subscription[]
+
+  @@map("product")
+}
+
+model Price {
+  id                String   @id
+  createdAt         DateTime
+  modifiedAt        DateTime
+  amountType        String
+  isArchived        Boolean
+  productId         String
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  priceCurrency     String
+  priceAmount       Int
+  type              String
+  recurringInterval String?
+
+  @@map("price")
+}
+
+// Benefit also references Polar's organization, stored as polarOrganizationId,
+// not related to your internal Organization model.
+model Benefit {
+  id                  String   @id
+  createdAt           DateTime
+  modifiedAt          DateTime
+  type                String
+  description         String
+  selectable          Boolean
+  deletable           Boolean
+  polarOrganizationId String
+  productId           String
+  product             Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  properties          Json?
+
+  @@map("benefit")
 }
