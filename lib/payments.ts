@@ -14,6 +14,11 @@ const prisma = new PrismaClient();
 
 let webhookPayload: ReturnType<typeof validateEvent>;
 
+type SubscriptionCustomFieldData = {
+    userId?: string;
+    organizationId?: string;
+};
+
 export async function getCustomer() {
     const session = await auth.api.getSession({
         headers: await headers()
@@ -34,33 +39,61 @@ export async function getCustomer() {
 }
 
 export async function handleSubscription(payload: WebhookSubscriptionActivePayload | WebhookSubscriptionCanceledPayload | WebhookSubscriptionCreatedPayload | WebhookSubscriptionRevokedPayload | WebhookSubscriptionUpdatedPayload) {
-    if (!payload.data) {
+    if (!payload?.data) {
         throw new Error("No data in payload");
     }
 
-    const customer = await getCustomer();
-
     const subData = payload.data;
 
+    // First, ensure the product exists in the database
+    if (subData.productId && subData.product) {
+        await prisma.product.upsert({
+            where: { id: subData.productId },
+            update: {
+                modifiedAt: subData.product.modifiedAt ? new Date(subData.product.modifiedAt) : new Date(),
+                name: subData.product.name,
+                description: subData.product.description ?? '',
+                isRecurring: subData.product.isRecurring,
+                isArchived: subData.product.isArchived,
+                polarOrganizationId: subData.product.organizationId,
+                metadata: subData.product.metadata,
+                attachedCustomFields: subData.product.attachedCustomFields
+            },
+            create: {
+                id: subData.productId,
+                createdAt: new Date(subData.product.createdAt),
+                modifiedAt: subData.product.modifiedAt ? new Date(subData.product.modifiedAt) : new Date(),
+                name: subData.product.name,
+                description: subData.product.description ?? '',
+                isRecurring: subData.product.isRecurring,
+                isArchived: subData.product.isArchived,
+                polarOrganizationId: subData.product.organizationId,
+                metadata: subData.product.metadata,
+                attachedCustomFields: subData.product.attachedCustomFields
+            }
+        });
+    }
+
+    // Then create/update the subscription
     await prisma.subscription.upsert({
         where: { id: subData.id },
         update: {
-            modifiedAt: new Date(subData.modifiedAt!),
+            modifiedAt: subData.modifiedAt ? new Date(subData.modifiedAt) : new Date(),
             status: subData.status,
             currentPeriodStart: new Date(subData.currentPeriodStart),
             currentPeriodEnd: new Date(subData.currentPeriodEnd!),
             cancelAtPeriodEnd: subData.cancelAtPeriodEnd,
             endedAt: subData.endedAt ? new Date(subData.endedAt) : null,
             metadata: subData.metadata,
-            customFieldData: subData.customFieldData
+            customFieldData: subData.customFieldData,
+            productId: subData.productId
         },
         create: {
             id: subData.id,
             createdAt: new Date(subData.createdAt!),
-            modifiedAt: new Date(subData.modifiedAt!),
-            // Set either userId or organizationId based on your logic and the webhook data
-            userId: customer.id,
-            organizationId: customer.id,
+            modifiedAt: subData.modifiedAt ? new Date(subData.modifiedAt) : new Date(),
+            userId: subData.metadata.userId as string,
+            organizationId: subData.metadata.organizationId as string,
             amount: subData.amount!,
             currency: subData.currency!,
             recurringInterval: subData.recurringInterval,

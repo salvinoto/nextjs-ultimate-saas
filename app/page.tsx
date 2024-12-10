@@ -16,10 +16,10 @@ export default async function Home() {
 		"Rate Limiting",
 		"Session Management",
 	];
-	const { result } = await polar.products.list({
-		organizationId: process.env.POLAR_ORGANIZATION_ID!,
-		isArchived: false, // Only fetch products which are published
-	})
+	// const { result } = await polar.products.list({
+	// 	organizationId: process.env.POLAR_ORGANIZATION_ID!,
+	// 	isArchived: false, // Only fetch products which are published
+	// })
 	return (
 		<div className="min-h-[80vh] flex items-center justify-center overflow-hidden no-visible-scrollbar px-6 md:px-0">
 			<main className="flex flex-col gap-4 row-start-2 items-center justify-center">
@@ -63,14 +63,14 @@ export default async function Home() {
 					<Suspense fallback={<SignInFallback />}>
 						<SignInButton />
 					</Suspense>
-					<div className="flex flex-col gap-y-32 pt-4">
+					{/* <div className="flex flex-col gap-y-32 pt-4">
 						<h1 className="text-5xl">Products</h1>
 						<div className="grid grid-cols-4 gap-12">
 							{result.items.map((product) => (
 								<ProductCard key={product.id} product={product} />
 							))}
 						</div>
-					</div>
+					</div> */}
 				</div>
 			</main>
 		</div>

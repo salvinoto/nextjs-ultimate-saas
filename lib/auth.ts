@@ -18,6 +18,7 @@ import { addAccountToSession } from "./plugin";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { PrismaClient } from "@prisma/client";
 import { ac, owner as ownerRole, admin as adminRole, member as memberRole, myCustomRole } from "@/lib/permissions";
+import { polar } from "@/polar";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -149,4 +150,23 @@ export const auth = betterAuth({
 		nextCookies(),
 		addAccountToSession,
 	],
+	databaseHooks: {
+		user: {
+			create: {
+				before: async (user) => {
+					// Modify the user object before it is created
+					return {
+						data: {
+							...user,
+							firstName: user.name.split(" ")[0],
+							lastName: user.name.split(" ")[1]
+						}
+					}
+				},
+				after: async (user) => {
+					//perform additional actions, like creating a Polar customer
+				},
+			},
+		},
+	},
 });
