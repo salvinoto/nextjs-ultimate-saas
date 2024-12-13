@@ -34,6 +34,7 @@ model User {
   twofactors       TwoFactor[]
   passkeys         Passkey[]
   Subscription     Subscription[]
+  FeatureUsage     FeatureUsage[]
 
   @@unique([email])
   @@map("user")
@@ -97,6 +98,7 @@ model Organization {
   members      Member[]
   invitations  Invitation[]
   Subscription Subscription[]
+  FeatureUsage FeatureUsage[]
 
   @@unique([slug])
   @@map("organization")
@@ -155,13 +157,13 @@ model Passkey {
 }
 
 model Subscription {
-  id                 String        @id
+  id                 String         @id
   createdAt          DateTime
   modifiedAt         DateTime
   userId             String?
-  user               User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
   organizationId     String?
-  organization       Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization       Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   amount             Int
   currency           String
   recurringInterval  String
@@ -172,18 +174,38 @@ model Subscription {
   startedAt          DateTime
   endedAt            DateTime?
   productId          String?
-  product            Product?      @relation(fields: [productId], references: [id])
+  product            Product?       @relation(fields: [productId], references: [id])
   priceId            String?
   discountId         String?
   checkoutId         String?
   metadata           Json?
   customFieldData    Json?
+  FeatureUsage       FeatureUsage[]
 
   @@map("subscription")
 }
 
-// The Product references Polar's organization via polarOrganizationId.
-// It does not necessarily map to your internal Organization model.
+model FeatureUsage {
+  id             String        @id @default(cuid())
+  featureName    String // Name of the feature being tracked
+  subscriptionId String // Link to the subscription
+  subscription   Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  organizationId String? // Optional link to organization
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String? // Optional link to user
+  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentUsage   Float? // Current usage value (float to support both count and storage)
+  unit           String? // MB, GB, items, etc.
+  lastUpdated    DateTime      @updatedAt
+  periodStart    DateTime // Start of the current billing period
+  periodEnd      DateTime // End of the current billing period
+  resetFrequency String? // daily, weekly, monthly, yearly - for features that reset
+
+  @@unique([subscriptionId, featureName, periodStart, periodEnd])
+}
+
+// May delete below
+
 model Product {
   id                   String         @id
   createdAt            DateTime

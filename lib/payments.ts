@@ -19,7 +19,7 @@ type SubscriptionCustomFieldData = {
     organizationId?: string;
 };
 
-export async function getCustomer() {
+export async function getCurrentCustomer() {
     const session = await auth.api.getSession({
         headers: await headers()
     })
