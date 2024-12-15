@@ -23,18 +23,19 @@ export default async function Home() {
 		isArchived: false, // Only fetch products which are published
 	})
 	const currentSubscription = await getCurrentSubscription()
-	const protectedUserFunction = withFeatureAccess(
+	// Test the feature access function
+	const protectedUserFunction = await withFeatureAccess(
 		{
 			subscriptionId: currentSubscription?.id!,
 			priceId : currentSubscription?.priceId!,
-			featureName : ""
+			featureName : "Server Storage",
 		},
 		{
-			onGranted: async () => { /* ... */ },
-			onDenied: async (reason) => { /* ... */ }
+			onGranted: async () => { console.log("Granted") },
+			onDenied: async (reason) => { console.log("Denied", reason) }
 		}
 	);
-
+	protectedUserFunction()
 	return (
 		<div className="min-h-[80vh] flex items-center justify-center overflow-hidden no-visible-scrollbar px-6 md:px-0">
 			<main className="flex flex-col gap-4 row-start-2 items-center justify-center">

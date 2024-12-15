@@ -1,119 +1,138 @@
-// Here is where you define your plan features. You can input your Polar price ID and the feature name and it will check if the feature is enabled in the plan.
+// Type definitions for feature limits and configurations
+export type StorageUnit = 'MB' | 'GB';
+export type CountUnit = 'items';
+export type LimitUnit = StorageUnit | CountUnit;
+export type LimitType = 'unlimited' | 'count' | 'storage';
 
 export interface FeatureLimit {
-    type: 'unlimited' | 'count' | 'storage';
-    value?: number;
-    unit?: 'MB' | 'GB' | 'items'; //Set the units for your metered features
+    readonly type: LimitType;
+    readonly value?: number;
+    readonly unit?: LimitUnit;
 }
 
-export interface Feature {
-    name: string;
-    enabled: boolean;
-    description: string;
-    limits?: FeatureLimit;
-    dependencies?: string[];
+// Strongly typed feature definition interface
+interface FeatureDefinition {
+    readonly name: string;
+    readonly description: string;
+    readonly defaultLimit: Readonly<FeatureLimit>;
+    readonly dependencies: readonly string[];
+}
+
+// Type helper function to preserve literal types
+const defineFeatures = <T extends Record<string, FeatureDefinition>>(features: T & Record<string, FeatureDefinition>): T => features;
+
+// Define available features with strict typing
+const featureDefinitions = defineFeatures({
+    serverStorage: {
+        name: 'Server Storage',
+        description: 'Storage for your server',
+        defaultLimit: { type: 'storage', unit: 'GB' },
+        dependencies: []
+    },
+    apiRequests: {
+        name: 'API Requests',
+        description: 'Number of API requests per month',
+        defaultLimit: { type: 'count', unit: 'items' },
+        dependencies: ['serverStorage']
+    }
+} as const);
+
+// Type utilities
+type FeatureKey = keyof typeof featureDefinitions;
+export type FeatureNames = typeof featureDefinitions[FeatureKey]['name'];
+
+// Feature configuration interfaces
+interface FeatureConfig {
+    readonly enabled: boolean;
+    readonly limits?: Readonly<FeatureLimit>;
+}
+
+export interface Feature extends FeatureConfig {
+    readonly name: FeatureNames;
+    readonly description: string;
+    readonly dependencies: readonly string[];
 }
 
 export interface Plan {
-    name: string;
-    priceId: string;
-    features: Feature[];
+    readonly name: string;
+    readonly priceId: string;
+    readonly features: readonly Feature[];
 }
 
-export const plans: Plan[] = [
-    {
-        name: 'free',
-        priceId: 'price_1N6jQgK6Ej4a9uY2oXnV0Ml2',
-        features: [
-            {
-                name: 'email-password',
-                enabled: true,
-                description: 'Basic email and password authentication'
-            },
-            {
-                name: 'organization-teams',
-                enabled: false,
-                description: 'Team management within organizations',
-                limits: { type: 'count', value: 1, unit: 'items' }
-            },
-            {
-                name: 'passkeys',
-                enabled: false,
-                description: 'Passwordless authentication with passkeys',
-                dependencies: ['email-verification']
-            },
-            {
-                name: 'multi-factor',
-                enabled: false,
-                description: 'Two-factor authentication',
-                dependencies: ['email-verification']
-            },
-            {
-                name: 'password-reset',
-                enabled: false,
-                description: 'Password reset functionality'
-            },
-            {
-                name: 'email-verification',
-                enabled: false,
-                description: 'Email verification system'
-            },
-            {
-                name: 'roles-permissions',
-                enabled: false,
-                description: 'Role-based access control'
-            },
-            {
-                name: 'rate-limiting',
-                enabled: false,
-                description: 'API rate limiting',
-                limits: { type: 'count', value: 100, unit: 'items' }
-            },
-            {
-                name: 'session-management',
-                enabled: false,
-                description: 'Advanced session management'
-            },
-        ],
-    },
-];
+// Type-safe helper function to create a feature
+const assignFeature = <K extends FeatureKey>(
+    key: K,
+    config: FeatureConfig
+): Feature => ({
+    name: featureDefinitions[key].name,
+    description: featureDefinitions[key].description,
+    dependencies: featureDefinitions[key].dependencies,
+    ...config
+});
 
-// Get all features from a specific plan
-type PlanFeatures = typeof plans[number]['features'][number];
+// Define plans with strict typing
+export const plans = [{
+    name: 'free',
+    priceId: '',
+    features: [
+        assignFeature('serverStorage', {
+            enabled: true,
+            limits: { ...featureDefinitions.serverStorage.defaultLimit, value: 5 }
+        }),
+        assignFeature('apiRequests', {
+            enabled: true,
+            limits: { ...featureDefinitions.apiRequests.defaultLimit, value: 1000 }
+        })
+    ],
+}, {
+    name: 'premium',
+    priceId: 'ea4598ba-c048-4f9b-af52-77f39a3ea40a',
+    features: [
+        assignFeature('serverStorage', {
+            enabled: true,
+            limits: { ...featureDefinitions.serverStorage.defaultLimit, value: 10 }
+        }),
+        assignFeature('apiRequests', {
+            enabled: true,
+            limits: { ...featureDefinitions.apiRequests.defaultLimit, value: 10000 }
+        })
+    ]
+}] as const;
 
-// Extract feature names as a union type
-export type FeatureNames = PlanFeatures['name'];
+// Export the default features (from the free plan)
+export const features: readonly Feature[] = plans[0].features;
 
-export const features: Feature[] = plans[0].features;
-
+// Feature context interface for custom limits
 export interface FeatureContext {
-    customLimits?: Record<string, FeatureLimit>;
+    readonly customLimits?: Readonly<Record<string, FeatureLimit>>;
 }
 
-// For organization-level tracking
-// const protectedOrgFunction = withFeatureAccess(
-//     {
-//         subscriptionId,
-//         organizationId,  // Provide organization ID
-//         priceId,
-//         featureName
-//     },
-//     {
-//         onGranted: async () => { /* ... */ },
-//         onDenied: async (reason) => { /* ... */ }
-//     }
-// );
+/*
+Example usage for organization-level tracking:
+const protectedOrgFunction = withFeatureAccess(
+    {
+        subscriptionId,
+        organizationId,  // Provide organization ID
+        priceId,
+        featureName
+    },
+    {
+        onGranted: async () => { },
+        onDenied: async (reason) => { }
+    }
+);
 
-// For user-level tracking
-// const protectedUserFunction = withFeatureAccess(
-//     {
-//         subscriptionId,
-//         userId,  // Provide user ID
-//         priceId,
-//         featureName
-//     },
-//     {
-//         onGranted: async () => { /* ... */ },
-//         onDenied: async (reason) => { /* ... */ }
-//     }
-// );
+Example usage for user-level tracking:
+const protectedUserFunction = withFeatureAccess(
+    {
+        subscriptionId,
+        userId,  // Provide user ID
+        priceId,
+        featureName
+    },
+    {
+        onGranted: async () => { },
+        onDenied: async (reason) => { }
+    }
+);
+*/

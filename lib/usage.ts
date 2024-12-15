@@ -119,10 +119,10 @@ export type FeatureAccessHandlers<T extends any[], R> = {
     onDenied?: (reason: string, currentUsage?: number) => Promise<R>;
 };
 
-export const withFeatureAccess = <T extends any[], R>(
+export const withFeatureAccess = async <T extends any[], R>(
     params: WithFeatureAccessParams,
     handlers: FeatureAccessHandlers<T, R>
-): ((...args: T) => Promise<R>) => {
+): Promise<(...args: T) => Promise<R>> => {
     return async (...args: T) => {
         try {
             const customer = await getCurrentCustomer();
