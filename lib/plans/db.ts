@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { FeatureLimit } from './features';
+import { getCurrentCustomer } from '@/lib/payments';
 
 const prisma = new PrismaClient();
 
@@ -88,3 +89,46 @@ export const getFeatureUsage = async ({
         }
     });
 };
+
+// Fetch users current subscription from db
+interface GetSubscriptionParams {
+    userId?: string;
+    organizationId?: string;
+}
+
+export async function getCurrentSubscription() {
+    const customer = await getCurrentCustomer();
+
+    if (!customer.id) {
+        throw new Error('Either userId or organizationId must be provided');
+    }
+
+    const currentDate = new Date();
+
+    return prisma.subscription.findFirst({
+        where: {
+            OR: [
+                { userId: customer.id },
+                { organizationId: customer.id }
+            ],
+            AND: [
+                { status: 'active' },
+                { currentPeriodStart: { lte: currentDate } },
+                { currentPeriodEnd: { gt: currentDate } },
+                { endedAt: null }
+            ]
+        },
+        include: {
+            product: true,
+            FeatureUsage: {
+                where: {
+                    periodStart: { lte: currentDate },
+                    periodEnd: { gt: currentDate }
+                }
+            }
+        },
+        orderBy: {
+            createdAt: 'desc'
+        }
+    });
+}

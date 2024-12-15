@@ -3,6 +3,8 @@ import { Suspense } from "react";
 import Link from 'next/link'
 import { polar } from '@/polar'
 import { ProductCard } from '@/components/product-card'
+import { getCurrentSubscription } from '@/lib/plans/db'
+import { withFeatureAccess } from "@/lib/usage";
 
 export default async function Home() {
 	const features = [
@@ -16,10 +18,23 @@ export default async function Home() {
 		"Rate Limiting",
 		"Session Management",
 	];
-	// const { result } = await polar.products.list({
-	// 	organizationId: process.env.POLAR_ORGANIZATION_ID!,
-	// 	isArchived: false, // Only fetch products which are published
-	// })
+	const { result } = await polar.products.list({
+		organizationId: process.env.POLAR_ORGANIZATION_ID!,
+		isArchived: false, // Only fetch products which are published
+	})
+	const currentSubscription = await getCurrentSubscription()
+	const protectedUserFunction = withFeatureAccess(
+		{
+			subscriptionId: currentSubscription?.id!,
+			priceId : currentSubscription?.priceId!,
+			featureName : ""
+		},
+		{
+			onGranted: async () => { /* ... */ },
+			onDenied: async (reason) => { /* ... */ }
+		}
+	);
+
 	return (
 		<div className="min-h-[80vh] flex items-center justify-center overflow-hidden no-visible-scrollbar px-6 md:px-0">
 			<main className="flex flex-col gap-4 row-start-2 items-center justify-center">
@@ -63,14 +78,29 @@ export default async function Home() {
 					<Suspense fallback={<SignInFallback />}>
 						<SignInButton />
 					</Suspense>
-					{/* <div className="flex flex-col gap-y-32 pt-4">
+					{currentSubscription?.productId && (
+						<div className="flex flex-col gap-3 border-y py-2 border-dotted bg-secondary/60 opacity-80">
+							<div className="text-xs flex items-center gap-2 justify-center text-muted-foreground">
+								<span className="text-center">
+									You are currently subscribed to the{" "}
+									<Link
+										href={`/products/${currentSubscription?.productId}`}
+										className="italic underline"
+									>
+										{currentSubscription?.product?.name}
+									</Link>
+								</span>
+							</div>
+						</div>
+					)}
+					<div className="flex flex-col gap-y-32 pt-4">
 						<h1 className="text-5xl">Products</h1>
 						<div className="grid grid-cols-4 gap-12">
 							{result.items.map((product) => (
 								<ProductCard key={product.id} product={product} />
 							))}
 						</div>
-					</div> */}
+					</div>
 				</div>
 			</main>
 		</div>

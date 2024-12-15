@@ -25,58 +25,64 @@ export const plans: Plan[] = [
         name: 'free',
         priceId: 'price_1N6jQgK6Ej4a9uY2oXnV0Ml2',
         features: [
-            { 
-                name: 'email-password', 
+            {
+                name: 'email-password',
                 enabled: true,
                 description: 'Basic email and password authentication'
             },
-            { 
-                name: 'organization-teams', 
+            {
+                name: 'organization-teams',
                 enabled: false,
                 description: 'Team management within organizations',
                 limits: { type: 'count', value: 1, unit: 'items' }
             },
-            { 
-                name: 'passkeys', 
+            {
+                name: 'passkeys',
                 enabled: false,
                 description: 'Passwordless authentication with passkeys',
                 dependencies: ['email-verification']
             },
-            { 
-                name: 'multi-factor', 
+            {
+                name: 'multi-factor',
                 enabled: false,
                 description: 'Two-factor authentication',
                 dependencies: ['email-verification']
             },
-            { 
-                name: 'password-reset', 
+            {
+                name: 'password-reset',
                 enabled: false,
                 description: 'Password reset functionality'
             },
-            { 
-                name: 'email-verification', 
+            {
+                name: 'email-verification',
                 enabled: false,
                 description: 'Email verification system'
             },
-            { 
-                name: 'roles-permissions', 
+            {
+                name: 'roles-permissions',
                 enabled: false,
                 description: 'Role-based access control'
             },
-            { 
-                name: 'rate-limiting', 
+            {
+                name: 'rate-limiting',
                 enabled: false,
                 description: 'API rate limiting',
                 limits: { type: 'count', value: 100, unit: 'items' }
             },
-            { 
-                name: 'session-management', 
+            {
+                name: 'session-management',
                 enabled: false,
                 description: 'Advanced session management'
             },
         ],
     },
 ];
+
+// Get all features from a specific plan
+type PlanFeatures = typeof plans[number]['features'][number];
+
+// Extract feature names as a union type
+export type FeatureNames = PlanFeatures['name'];
 
 export const features: Feature[] = plans[0].features;
 

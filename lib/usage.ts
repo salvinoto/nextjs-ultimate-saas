@@ -1,7 +1,7 @@
 'use server';
 
 import { getCurrentCustomer } from "./payments";
-import { plans, FeatureContext, FeatureLimit } from "@/lib/plans/features";
+import { plans, FeatureContext, FeatureLimit, FeatureNames } from "@/lib/plans/features";
 import { getFeatureUsage, updateFeatureUsage } from "@/lib/plans/db";
 
 export interface FeatureAccessResponse {
@@ -110,7 +110,7 @@ export type WithFeatureAccessParams = {
     organizationId?: string;
     userId?: string;
     priceId: string;
-    featureName: string;
+    featureName: FeatureNames;
     context?: FeatureContext;
 };
 
@@ -153,7 +153,7 @@ export const withFeatureAccess = <T extends any[], R>(
 export const hasFeatureAccess = async (
     subscriptionId: string,
     priceId: string,
-    featureName: string,
+    featureName: FeatureNames,
     organizationId?: string,
     userId?: string,
     context?: FeatureContext
@@ -165,7 +165,7 @@ export const hasFeatureAccess = async (
         };
     }
 
-    const plan = plans.find((plan) => plan.priceId === priceId);
+    const plan = plans.find((plan: { priceId: string; }) => plan.priceId === priceId);
     if (!plan) {
         return {
             allowed: false,
