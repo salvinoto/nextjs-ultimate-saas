@@ -15,7 +15,7 @@ datasource db {
 }
 
 model User {
-  id               String       @id
+  id               String         @id
   name             String
   email            String
   emailVerified    Boolean
@@ -33,6 +33,8 @@ model User {
   invitations      Invitation[]
   twofactors       TwoFactor[]
   passkeys         Passkey[]
+  Subscription     Subscription[]
+  FeatureUsage     FeatureUsage[]
 
   @@unique([email])
   @@map("user")
@@ -87,14 +89,16 @@ model Verification {
 }
 
 model Organization {
-  id          String       @id
-  name        String
-  slug        String?
-  logo        String?
-  createdAt   DateTime
-  metadata    String?
-  members     Member[]
-  invitations Invitation[]
+  id           String         @id
+  name         String
+  slug         String?
+  logo         String?
+  createdAt    DateTime
+  metadata     String?
+  members      Member[]
+  invitations  Invitation[]
+  Subscription Subscription[]
+  FeatureUsage FeatureUsage[]
 
   @@unique([slug])
   @@map("organization")
@@ -150,4 +154,106 @@ model Passkey {
   createdAt      DateTime?
 
   @@map("passkey")
+}
+
+model Subscription {
+  id                 String         @id
+  createdAt          DateTime
+  modifiedAt         DateTime
+  userId             String?
+  user               User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId     String?
+  organization       Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  amount             Int
+  currency           String
+  recurringInterval  String
+  status             String
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd  Boolean
+  startedAt          DateTime
+  endedAt            DateTime?
+  productId          String?
+  product            Product?       @relation(fields: [productId], references: [id])
+  priceId            String?
+  discountId         String?
+  checkoutId         String?
+  metadata           Json?
+  customFieldData    Json?
+  FeatureUsage       FeatureUsage[]
+
+  @@map("subscription")
+}
+
+model FeatureUsage {
+  id             String        @id @default(cuid())
+  featureName    String // Name of the feature being tracked
+  subscriptionId String // Link to the subscription
+  subscription   Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  organizationId String? // Optional link to organization
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String? // Optional link to user
+  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentUsage   Float? // Current usage value (float to support both count and storage)
+  unit           String? // MB, GB, items, etc.
+  lastUpdated    DateTime      @updatedAt
+  periodStart    DateTime // Start of the current billing period
+  periodEnd      DateTime // End of the current billing period
+  resetFrequency String? // daily, weekly, monthly, yearly - for features that reset
+
+  @@unique([subscriptionId, featureName, periodStart, periodEnd])
+}
+
+// May delete below
+
+model Product {
+  id                   String         @id
+  createdAt            DateTime
+  modifiedAt           DateTime
+  name                 String
+  description          String
+  isRecurring          Boolean
+  isArchived           Boolean
+  polarOrganizationId  String // ID from Polar's data
+  metadata             Json?
+  prices               Price[]
+  benefits             Benefit[]
+  attachedCustomFields Json?
+  Subscription         Subscription[]
+
+  @@map("product")
+}
+
+model Price {
+  id                String   @id
+  createdAt         DateTime
+  modifiedAt        DateTime
+  amountType        String
+  isArchived        Boolean
+  productId         String
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  priceCurrency     String
+  priceAmount       Int
+  type              String
+  recurringInterval String?
+
+  @@map("price")
+}
+
+// Benefit also references Polar's organization, stored as polarOrganizationId,
+// not related to your internal Organization model.
+model Benefit {
+  id                  String   @id
+  createdAt           DateTime
+  modifiedAt          DateTime
+  type                String
+  description         String
+  selectable          Boolean
+  deletable           Boolean
+  polarOrganizationId String
+  productId           String
+  product             Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  properties          Json?
+
+  @@map("benefit")
 }

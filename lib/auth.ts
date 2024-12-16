@@ -18,6 +18,7 @@ import { addAccountToSession } from "./plugin";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { PrismaClient } from "@prisma/client";
 import { ac, owner as ownerRole, admin as adminRole, member as memberRole, myCustomRole } from "@/lib/permissions";
+import { polar } from "@/polar";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -67,36 +68,36 @@ export const auth = betterAuth({
 			});
 		},
 	},
-	socialProviders: {
-		facebook: {
-			clientId: process.env.FACEBOOK_CLIENT_ID || "",
-			clientSecret: process.env.FACEBOOK_CLIENT_SECRET || "",
-		},
-		github: {
-			clientId: process.env.GITHUB_CLIENT_ID || "",
-			clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
-		},
-		google: {
-			clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "",
-			clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-		},
-		discord: {
-			clientId: process.env.DISCORD_CLIENT_ID || "",
-			clientSecret: process.env.DISCORD_CLIENT_SECRET || "",
-		},
-		microsoft: {
-			clientId: process.env.MICROSOFT_CLIENT_ID || "",
-			clientSecret: process.env.MICROSOFT_CLIENT_SECRET || "",
-		},
-		twitch: {
-			clientId: process.env.TWITCH_CLIENT_ID || "",
-			clientSecret: process.env.TWITCH_CLIENT_SECRET || "",
-		},
-		twitter: {
-			clientId: process.env.TWITTER_CLIENT_ID || "",
-			clientSecret: process.env.TWITTER_CLIENT_SECRET || "",
-		},
-	},
+	// socialProviders: {
+	// 	facebook: {
+	// 		clientId: process.env.FACEBOOK_CLIENT_ID || "",
+	// 		clientSecret: process.env.FACEBOOK_CLIENT_SECRET || "",
+	// 	},
+	// 	github: {
+	// 		clientId: process.env.GITHUB_CLIENT_ID || "",
+	// 		clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
+	// 	},
+	// 	google: {
+	// 		clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "",
+	// 		clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+	// 	},
+	// 	discord: {
+	// 		clientId: process.env.DISCORD_CLIENT_ID || "",
+	// 		clientSecret: process.env.DISCORD_CLIENT_SECRET || "",
+	// 	},
+	// 	microsoft: {
+	// 		clientId: process.env.MICROSOFT_CLIENT_ID || "",
+	// 		clientSecret: process.env.MICROSOFT_CLIENT_SECRET || "",
+	// 	},
+	// 	twitch: {
+	// 		clientId: process.env.TWITCH_CLIENT_ID || "",
+	// 		clientSecret: process.env.TWITCH_CLIENT_SECRET || "",
+	// 	},
+	// 	twitter: {
+	// 		clientId: process.env.TWITTER_CLIENT_ID || "",
+	// 		clientSecret: process.env.TWITTER_CLIENT_SECRET || "",
+	// 	},
+	// },
 	plugins: [
 		organization({
 			async sendInvitationEmail(data) {
@@ -149,4 +150,23 @@ export const auth = betterAuth({
 		nextCookies(),
 		addAccountToSession,
 	],
+	databaseHooks: {
+		user: {
+			create: {
+				before: async (user) => {
+					// Modify the user object before it is created
+					return {
+						data: {
+							...user,
+							firstName: user.name.split(" ")[0],
+							lastName: user.name.split(" ")[1]
+						}
+					}
+				},
+				after: async (user) => {
+					//perform additional actions, like creating a Polar customer
+				},
+			},
+		},
+	},
 });
