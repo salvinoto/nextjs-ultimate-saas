@@ -181,6 +181,7 @@ model Subscription {
   metadata           Json?
   customFieldData    Json?
   FeatureUsage       FeatureUsage[]
+  FeatureLimit       FeatureLimit[]
 
   @@map("subscription")
 }
@@ -202,9 +203,26 @@ model FeatureUsage {
   resetFrequency String? // daily, weekly, monthly, yearly - for features that reset
 
   @@unique([subscriptionId, featureName, periodStart, periodEnd])
+  @@map("feature_usage")
 }
 
-// May delete below
+model FeatureLimit {
+  id             String       @id @default(cuid())
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  featureKey     String
+  type           String
+  value          Float?
+  unit           String?
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  subscriptionId String
+
+  @@unique([subscriptionId, featureKey], name: "subscriptionId_featureKey")
+  @@index([subscriptionId])
+  @@map("feature_limit")
+}
+
+// Can remove below in future
 
 model Product {
   id                   String         @id

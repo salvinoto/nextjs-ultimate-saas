@@ -1,6 +1,8 @@
 import { PrismaClient } from '@prisma/client';
-import { FeatureLimit } from './features';
+import { featureDefinitions, type FeatureLimit, plans } from './features';
 import { getCurrentCustomer } from '@/lib/payments';
+
+type FeatureKey = keyof typeof featureDefinitions;
 
 const prisma = new PrismaClient();
 
@@ -8,14 +10,14 @@ export interface UpdateFeatureUsageParams {
     subscriptionId: string;
     organizationId?: string;
     userId?: string;
-    featureName: string;
+    featureName: FeatureKey[];
     usage: number;
     limit?: FeatureLimit;
 }
 
 export interface GetFeatureUsageParams {
     subscriptionId: string;
-    featureName: string;
+    featureName: FeatureKey;
     organizationId?: string;
     userId?: string;
 }
@@ -44,30 +46,34 @@ export const updateFeatureUsage = async ({
     // Only include unit if the feature has a limit with a unit
     const unit = limit?.unit;
 
-    return prisma.featureUsage.upsert({
-        where: {
-            subscriptionId_featureName_periodStart_periodEnd: {
+    const updates = featureName.map(name => 
+        prisma.featureUsage.upsert({
+            where: {
+                subscriptionId_featureName_periodStart_periodEnd: {
+                    subscriptionId,
+                    featureName: name,
+                    periodStart,
+                    periodEnd
+                }
+            },
+            update: {
+                currentUsage: usage,
+                lastUpdated: new Date()
+            },
+            create: {
                 subscriptionId,
-                featureName,
+                organizationId,
+                userId,
+                featureName: name,
+                currentUsage: usage,
+                unit,
                 periodStart,
                 periodEnd
             }
-        },
-        update: {
-            currentUsage: usage,
-            lastUpdated: new Date()
-        },
-        create: {
-            subscriptionId,
-            organizationId,
-            userId,
-            featureName,
-            currentUsage: usage,
-            unit,
-            periodStart,
-            periodEnd
-        }
-    });
+        })
+    );
+
+    return Promise.all(updates);
 };
 
 export const getFeatureUsage = async ({
@@ -132,3 +138,65 @@ export async function getCurrentSubscription() {
         }
     });
 }
+
+export const syncFeatureLimits = async () => {
+    // Get all active subscriptions
+    const subscriptions = await prisma.subscription.findMany({
+        where: {
+            status: 'active'
+        },
+        include: {
+            product: true
+        }
+    });
+
+    const updates = subscriptions.flatMap(subscription => {
+        // Find the plan that matches the subscription's product
+        const plan = plans.find(p => p.priceId === subscription.product?.id);
+        if (!plan) {
+            console.warn(`Plan not found for subscription: ${subscription.id}`);
+            return [];
+        }
+
+        // Create or update feature limits for each feature in the plan
+        return plan.features.map(async feature => {
+            const featureKey = Object.keys(featureDefinitions).find(
+                key => featureDefinitions[key as FeatureKey].name === feature.name
+            ) as FeatureKey;
+
+            if (!featureKey) {
+                console.warn(`Feature not found: ${feature.name}`);
+                return null;
+            }
+
+            const defaultLimit = featureDefinitions[featureKey].defaultLimit;
+            const featureLimit = (feature.limits || defaultLimit) as FeatureLimit;
+
+            return prisma.featureLimit.upsert({
+                where: {
+                    subscriptionId_featureKey: { 
+                        subscriptionId: subscription.id, 
+                        featureKey 
+                    }
+                },
+                update: {
+                    type: featureLimit.type,
+                    value: featureLimit.value ?? null,
+                    unit: featureLimit.unit ?? null,
+                    updatedAt: new Date()
+                },
+                create: {
+                    subscriptionId: subscription.id,
+                    featureKey,
+                    type: featureLimit.type,
+                    value: featureLimit.value ?? null,
+                    unit: featureLimit.unit ?? null
+                }
+            });
+        });
+    });
+
+    // Filter out any null values and execute all updates
+    const validUpdates = updates.filter(update => update !== null);
+    return Promise.all(validUpdates);
+};

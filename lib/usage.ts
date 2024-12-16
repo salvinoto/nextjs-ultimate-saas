@@ -1,8 +1,11 @@
 'use server';
 
 import { getCurrentCustomer } from "./payments";
-import { plans, FeatureContext, FeatureLimit, FeatureNames } from "@/lib/plans/features";
+import { featureDefinitions, type FeatureContext, type FeatureLimit } from "@/lib/plans/features";
 import { getFeatureUsage, updateFeatureUsage } from "@/lib/plans/db";
+import { plans } from "@/lib/plans/features";
+
+type FeatureKey = keyof typeof featureDefinitions;
 
 export interface FeatureAccessResponse {
     allowed: boolean;
@@ -12,12 +15,13 @@ export interface FeatureAccessResponse {
 
 const isFeatureEnabled = (
     priceId: string,
-    featureName: string,
+    featureKey: FeatureKey,
     context?: FeatureContext
 ): boolean => {
     const plan = plans.find((plan) => plan.priceId === priceId);
     if (!plan) return false;
 
+    const featureName = featureDefinitions[featureKey].name;
     const feature = plan.features.find((feature) => feature.name === featureName);
     if (!feature) return false;
 
@@ -27,7 +31,7 @@ const isFeatureEnabled = (
     // Check dependencies
     if (feature.dependencies) {
         const missingDependencies = feature.dependencies.some(
-            depName => !isFeatureEnabled(priceId, depName, context)
+            depKey => !isFeatureEnabled(priceId, depKey as FeatureKey, context)
         );
         if (missingDependencies) return false;
     }
@@ -37,15 +41,16 @@ const isFeatureEnabled = (
 
 const getFeatureLimit = (
     priceId: string,
-    featureName: string,
+    featureKey: FeatureKey,
     context?: FeatureContext
 ): FeatureLimit | undefined => {
     const plan = plans.find((plan) => plan.priceId === priceId);
+    const featureName = featureDefinitions[featureKey].name;
     const feature = plan?.features.find((feature) => feature.name === featureName);
 
     // Check for custom limits first
-    if (context?.customLimits?.[featureName]) {
-        return context.customLimits[featureName];
+    if (context?.customLimits?.[featureKey]) {
+        return context.customLimits[featureKey];
     }
 
     return feature?.limits;
@@ -55,11 +60,11 @@ export const validateFeatureUsage = async (
     subscriptionId: string,
     organizationId: string,
     priceId: string,
-    featureName: string,
+    featureKey: FeatureKey,
     newUsage: number,
     context?: FeatureContext
 ): Promise<FeatureAccessResponse> => {
-    const limit = getFeatureLimit(priceId, featureName, context);
+    const limit = getFeatureLimit(priceId, featureKey, context);
 
     // If no limit or unlimited, update usage and allow
     if (!limit || limit.type === 'unlimited') {
@@ -67,7 +72,7 @@ export const validateFeatureUsage = async (
             await updateFeatureUsage({
                 subscriptionId,
                 organizationId,
-                featureName,
+                featureName: [featureKey],
                 usage: newUsage,
                 limit
             });
@@ -88,7 +93,7 @@ export const validateFeatureUsage = async (
     await updateFeatureUsage({
         subscriptionId,
         organizationId,
-        featureName,
+        featureName: [featureKey],
         usage: newUsage,
         limit
     });
@@ -101,131 +106,102 @@ export interface FeatureAccessParams {
     organizationId?: string;
     userId?: string;
     priceId: string;
-    featureName: string;
+    featureKey: FeatureKey;
     context?: FeatureContext;
 }
 
-export type WithFeatureAccessParams = {
+export interface WithFeatureAccessParams {
     subscriptionId: string;
     organizationId?: string;
     userId?: string;
     priceId: string;
-    featureName: FeatureNames;
+    featureKey: FeatureKey;
     context?: FeatureContext;
-};
+}
 
-export type FeatureAccessHandlers<T extends any[], R> = {
+export interface FeatureAccessHandlers<T extends any[] = any[], R = any> {
     onGranted: (...args: T) => Promise<R>;
     onDenied?: (reason: string, currentUsage?: number) => Promise<R>;
-};
+}
 
-export const withFeatureAccess = async <T extends any[], R>(
+export async function withFeatureAccess<T extends any[] = any[], R = any>(
     params: WithFeatureAccessParams,
     handlers: FeatureAccessHandlers<T, R>
-): Promise<(...args: T) => Promise<R>> => {
+): Promise<(...args: T) => Promise<R>> {
     return async (...args: T) => {
-        try {
-            const customer = await getCurrentCustomer();
-            const access = await hasFeatureAccess(
-                params.subscriptionId,
-                params.priceId,
-                params.featureName,
-                params.organizationId || customer.id,
-                params.userId || customer.id,
-                params.context
-            );
+        const result = await hasFeatureAccess(
+            params.subscriptionId,
+            params.priceId,
+            params.featureKey,
+            params.organizationId,
+            params.userId,
+            params.context
+        );
 
-            if (access.allowed) {
-                return await handlers.onGranted(...args);
-            } else {
-                if (handlers.onDenied) {
-                    return await handlers.onDenied(access.reason!, access.currentUsage);
-                }
-                throw new Error(access.reason);
-            }
-        } catch (error) {
-            throw error instanceof Error ? error : new Error('Unknown error occurred');
+        if (result.allowed) {
+            return handlers.onGranted(...args);
         }
-    };
-};
 
-// The base feature access check function
+        if (handlers.onDenied) {
+            return handlers.onDenied(result.reason || 'Access denied', result.currentUsage);
+        }
+
+        throw new Error(result.reason || 'Access denied');
+    };
+}
+
 export const hasFeatureAccess = async (
     subscriptionId: string,
     priceId: string,
-    featureName: FeatureNames,
+    featureKey: FeatureKey,
     organizationId?: string,
     userId?: string,
     context?: FeatureContext
 ): Promise<FeatureAccessResponse> => {
-    if (!organizationId && !userId) {
+    // First check if the feature is enabled for the plan
+    if (!isFeatureEnabled(priceId, featureKey, context)) {
         return {
             allowed: false,
-            reason: 'Either organizationId or userId must be provided'
+            reason: 'Feature not enabled for this plan'
         };
     }
 
-    const plan = plans.find((plan: { priceId: string; }) => plan.priceId === priceId);
-    if (!plan) {
-        return {
-            allowed: false,
-            reason: `Plan with price ID '${priceId}' not found`
-        };
-    }
-
-    // 1. Check if the feature is enabled (includes dependency checks)
-    if (!isFeatureEnabled(priceId, featureName, context)) {
-        const feature = plan.features.find(f => f.name === featureName);
-        if (!feature) {
-            return {
-                allowed: false,
-                reason: `Feature '${featureName}' not found in plan '${plan.name}'`
-            };
-        }
-        if (!feature.enabled) {
-            return {
-                allowed: false,
-                reason: `Feature '${featureName}' is not enabled in plan '${plan.name}'`
-            };
-        }
-        if (feature.dependencies?.length) {
-            return {
-                allowed: false,
-                reason: `Feature '${featureName}' has unmet dependencies: ${feature.dependencies.join(', ')}`
-            };
-        }
-    }
-
-    // 2. Get current usage from database
-    const currentUsageRecord = await getFeatureUsage({
+    // Get current usage
+    const usage = await getFeatureUsage({
         subscriptionId,
-        featureName,
+        featureName: featureKey,
         organizationId,
         userId
     });
 
-    // 3. Validate against limits
-    const limits = getFeatureLimit(priceId, featureName, context);
-
-    // If there are no limits or it's unlimited, access is granted
-    if (!limits || limits.type === 'unlimited') {
-        return {
-            allowed: true,
-            currentUsage: currentUsageRecord?.currentUsage ?? 0
-        };
+    // If no usage record exists yet, create one with 0 usage
+    if (!usage) {
+        await updateFeatureUsage({
+            subscriptionId,
+            organizationId,
+            userId,
+            featureName: [featureKey],
+            usage: 0
+        });
+        return { allowed: true, currentUsage: 0 };
     }
 
-    // 4. Check current usage against limits
-    if (currentUsageRecord?.currentUsage && currentUsageRecord.currentUsage >= (limits.value || 0)) {
+    const limit = getFeatureLimit(priceId, featureKey, context);
+    const currentUsage = usage?.currentUsage ?? 0;
+
+    // If no limit or unlimited type, allow
+    if (!limit || limit.type === 'unlimited') {
+        return { allowed: true, currentUsage };
+    }
+
+    // Check against limit
+    if (currentUsage >= (limit.value || 0)) {
         return {
             allowed: false,
-            reason: `Usage limit exceeded: ${currentUsageRecord.currentUsage} ${limits.unit || ''} exceeds limit of ${limits.value} ${limits.unit || ''}`,
-            currentUsage: currentUsageRecord.currentUsage
+            reason: `Usage limit exceeded: ${currentUsage} ${limit.unit || ''} of ${limit.value} ${limit.unit || ''} used`,
+            currentUsage
         };
     }
 
-    return {
-        allowed: true,
-        currentUsage: currentUsageRecord?.currentUsage ?? 0
-    };
+    return { allowed: true, currentUsage };
 };

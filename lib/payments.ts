@@ -9,6 +9,7 @@ import {
 import { PrismaClient } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { updateFeatureUsage } from "./plans/db";
 
 const prisma = new PrismaClient();
 
