@@ -20,22 +20,37 @@ export default async function Home() {
 	];
 	const { result } = await polar.products.list({
 		organizationId: process.env.POLAR_ORGANIZATION_ID!,
-		isArchived: false, // Only fetch products which are published
+		isArchived: false,
 	})
 	const currentSubscription = await getCurrentSubscription()
-	// Test the feature access function
-	const protectedUserFunction = await withFeatureAccess(
+	const ProtectedComponentFn = await withFeatureAccess(
 		{
 			subscriptionId: currentSubscription?.id!,
-			priceId : currentSubscription?.priceId!,
-			featureName : "Server Storage",
+			priceId: currentSubscription?.priceId!,
+			featureName: "Server Storage",
 		},
 		{
-			onGranted: async () => { console.log("Granted") },
-			onDenied: async (reason) => { console.log("Denied", reason) }
+			onGranted: async () => (
+				<div className="flex flex-col gap-3 border-y py-2 border-dotted bg-secondary/60 opacity-80">
+					<div className="text-xs flex items-center gap-2 justify-center text-muted-foreground">
+						<span className="text-center">
+							You have access to Server Storage feature!
+						</span>
+					</div>
+				</div>
+			),
+			onDenied: async (reason) => (
+				<div className="flex flex-col gap-3 border-y py-2 border-dotted bg-red-100 opacity-80">
+					<div className="text-xs flex items-center gap-2 justify-center text-red-600">
+						<span className="text-center">
+							{reason}
+						</span>
+					</div>
+				</div>
+			),
 		}
 	);
-	protectedUserFunction()
+	const ProtectedComponent = await ProtectedComponentFn();
 	return (
 		<div className="min-h-[80vh] flex items-center justify-center overflow-hidden no-visible-scrollbar px-6 md:px-0">
 			<main className="flex flex-col gap-4 row-start-2 items-center justify-center">
@@ -94,11 +109,16 @@ export default async function Home() {
 							</div>
 						</div>
 					)}
+					{ProtectedComponent}
 					<div className="flex flex-col gap-y-32 pt-4">
 						<h1 className="text-5xl">Products</h1>
 						<div className="grid grid-cols-4 gap-12">
 							{result.items.map((product) => (
-								<ProductCard key={product.id} product={product} />
+								<ProductCard 
+									key={product.id} 
+									product={product} 
+									currentSubscription={currentSubscription}
+								/>
 							))}
 						</div>
 					</div>
