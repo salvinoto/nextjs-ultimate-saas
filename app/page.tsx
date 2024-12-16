@@ -112,7 +112,12 @@ export default async function Home() {
 					{ProtectedComponent}
 					<div className="flex flex-col gap-y-32 pt-4">
 						<h1 className="text-5xl">Products</h1>
-						<div className="grid grid-cols-4 gap-12">
+						<div className={`grid gap-6 md:gap-8 lg:gap-12 ${
+							result.items.length === 1 ? 'grid-cols-1' :
+							result.items.length === 2 ? 'grid-cols-1 sm:grid-cols-2' :
+							result.items.length === 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' :
+							'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+						}`}>
 							{result.items.map((product) => (
 								<ProductCard 
 									key={product.id} 
