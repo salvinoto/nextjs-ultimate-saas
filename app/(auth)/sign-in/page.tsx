@@ -8,7 +8,7 @@ import { useEffect } from "react";
 
 export default function Page() {
 	useEffect(() => {
-		client.oneTap();
+		// client.oneTap();
 	}, []);
 
 	return (

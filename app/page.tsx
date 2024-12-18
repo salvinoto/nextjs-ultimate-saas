@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { polar } from '@/polar'
 import { ProductCard } from '@/components/product-card'
 import { getCurrentSubscription } from '@/lib/plans/db'
+import { getCurrentCustomer } from "@/lib/payments";
 import { withFeatureAccess } from "@/lib/usage";
 
 export default async function Home() {
@@ -27,6 +28,9 @@ export default async function Home() {
 		isArchived: false,
 	})
 	const currentSubscription = await getCurrentSubscription()
+	
+	const currentCustomer = await getCurrentCustomer()
+
 	const ProtectedComponentFn = await withFeatureAccess(
 		{
 			subscriptionId: currentSubscription?.id!,

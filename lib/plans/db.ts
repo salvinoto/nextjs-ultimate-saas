@@ -22,6 +22,13 @@ export interface GetFeatureUsageParams {
     userId?: string;
 }
 
+export interface InitializeFeatureUsageParams {
+    subscriptionId: string;
+    organizationId?: string;
+    userId?: string;
+    features: FeatureKey[];
+}
+
 export const getCurrentBillingPeriod = () => {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), 1); // First day of current month
@@ -43,10 +50,14 @@ export const updateFeatureUsage = async ({
         throw new Error('Either organizationId or userId must be provided');
     }
 
+    if (organizationId && userId) {
+        throw new Error('Cannot provide both organizationId and userId. Please provide only one.');
+    }
+
     // Only include unit if the feature has a limit with a unit
     const unit = limit?.unit;
 
-    const updates = featureName.map(name => 
+    const updates = featureName.map(name =>
         prisma.featureUsage.upsert({
             where: {
                 subscriptionId_featureName_periodStart_periodEnd: {
@@ -58,12 +69,13 @@ export const updateFeatureUsage = async ({
             },
             update: {
                 currentUsage: usage,
-                lastUpdated: new Date()
+                lastUpdated: new Date(),
+                ...(organizationId ? { organizationId } : { userId })
             },
             create: {
                 subscriptionId,
-                organizationId,
-                userId,
+                organizationId: organizationId || null,
+                userId: userId || null,
                 featureName: name,
                 currentUsage: usage,
                 unit,
@@ -94,6 +106,67 @@ export const getFeatureUsage = async ({
             ...(userId ? { userId } : {})
         }
     });
+};
+
+export const initializeFeatureUsage = async ({
+    subscriptionId,
+    organizationId,
+    userId,
+    features
+}: InitializeFeatureUsageParams) => {
+    if (!organizationId && !userId) {
+        throw new Error('Either organizationId or userId must be provided');
+    }
+
+    if (organizationId && userId) {
+        throw new Error('Cannot provide both organizationId and userId');
+    }
+
+    const { start: periodStart, end: periodEnd } = getCurrentBillingPeriod();
+
+    // Get the subscription to determine the plan
+    const subscription = await prisma.subscription.findUnique({
+        where: { id: subscriptionId },
+        select: { priceId: true }
+    });
+
+    if (!subscription) {
+        throw new Error('Subscription not found');
+    }
+
+    const plan = plans.find(p => p.priceId === subscription.priceId);
+    if (!plan) {
+        throw new Error('Plan not found');
+    }
+
+    // Create feature usage records in bulk
+    const featureUsageData = features.map(featureKey => {
+        const featureName = featureDefinitions[featureKey].name;
+        const feature = plan.features.find(f => f.name === featureName);
+        const limit = feature?.limits;
+
+        return {
+            id: undefined,
+            featureName,
+            subscriptionId,
+            organizationId,
+            userId,
+            currentUsage: 0,
+            unit: limit?.unit,
+            lastUpdated: new Date(),
+            periodStart,
+            periodEnd,
+            resetFrequency: null
+        };
+    });
+
+    // Use createMany for bulk insertion
+    await prisma.featureUsage.createMany({
+        data: featureUsageData,
+        skipDuplicates: true,
+    });
+
+    return featureUsageData;
 };
 
 // Fetch users current subscription from db
@@ -152,7 +225,7 @@ export const syncFeatureLimits = async () => {
 
     const updates = subscriptions.flatMap(subscription => {
         // Find the plan that matches the subscription's product
-        const plan = plans.find(p => p.priceId === subscription.product?.id);
+        const plan = plans.find(p => p.priceId === subscription.priceId);
         if (!plan) {
             console.warn(`Plan not found for subscription: ${subscription.id}`);
             return [];
@@ -174,9 +247,9 @@ export const syncFeatureLimits = async () => {
 
             return prisma.featureLimit.upsert({
                 where: {
-                    subscriptionId_featureKey: { 
-                        subscriptionId: subscription.id, 
-                        featureKey 
+                    subscriptionId_featureKey: {
+                        subscriptionId: subscription.id,
+                        featureKey
                     }
                 },
                 update: {

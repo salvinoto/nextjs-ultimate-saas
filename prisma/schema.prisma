@@ -203,6 +203,8 @@ model FeatureUsage {
   resetFrequency String? // daily, weekly, monthly, yearly - for features that reset
 
   @@unique([subscriptionId, featureName, periodStart, periodEnd])
+  @@index([organizationId])
+  @@index([userId])
   @@map("feature_usage")
 }
 
@@ -260,6 +262,7 @@ model Price {
 
 // Benefit also references Polar's organization, stored as polarOrganizationId,
 // not related to your internal Organization model.
+
 model Benefit {
   id                  String   @id
   createdAt           DateTime

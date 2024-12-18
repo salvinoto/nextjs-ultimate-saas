@@ -1,15 +1,20 @@
+'use server';
+
 import { WebhookSubscriptionActivePayload } from "@polar-sh/sdk/models/components/webhooksubscriptionactivepayload";
 import { WebhookSubscriptionCanceledPayload } from "@polar-sh/sdk/models/components/webhooksubscriptioncanceledpayload";
 import { WebhookSubscriptionCreatedPayload } from "@polar-sh/sdk/models/components/webhooksubscriptioncreatedpayload";
 import { WebhookSubscriptionRevokedPayload } from "@polar-sh/sdk/models/components/webhooksubscriptionrevokedpayload";
 import { WebhookSubscriptionUpdatedPayload } from "@polar-sh/sdk/models/components/webhooksubscriptionupdatedpayload";
+import { WebhookProductCreatedPayload } from "@polar-sh/sdk/models/components";
+import { Product } from "@polar-sh/sdk/models/components/product";
 import {
     validateEvent,
 } from "@polar-sh/sdk/webhooks";
 import { PrismaClient } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { updateFeatureUsage } from "./plans/db";
+import { syncFeatureLimits, updateFeatureUsage } from "./plans/db";
+import { polar } from "@/polar";
 
 const prisma = new PrismaClient();
 
@@ -20,7 +25,12 @@ type SubscriptionCustomFieldData = {
     organizationId?: string;
 };
 
-export async function getCurrentCustomer() {
+type CustomerResult = {
+    organization: NonNullable<Awaited<ReturnType<typeof auth.api.getFullOrganization>>> | null;
+    user: NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>['user'];
+} & (NonNullable<Awaited<ReturnType<typeof auth.api.getFullOrganization>>> | NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>['user']);
+
+export async function getCurrentCustomer(): Promise<CustomerResult> {
     const session = await auth.api.getSession({
         headers: await headers()
     })
@@ -32,13 +42,16 @@ export async function getCurrentCustomer() {
         throw new Error("No session");
     }
 
-    if (organization) {
-        return organization;
-    }
+    const base = organization || session.user;
+    const result = Object.assign(base, {
+        organization: organization || null,
+        user: session.user,
+    });
 
-    return session.user;
+    return result as CustomerResult;
 }
 
+// Webhook handlers
 export async function handleSubscription(payload: WebhookSubscriptionActivePayload | WebhookSubscriptionCanceledPayload | WebhookSubscriptionCreatedPayload | WebhookSubscriptionRevokedPayload | WebhookSubscriptionUpdatedPayload) {
     if (!payload?.data) {
         throw new Error("No data in payload");
@@ -47,33 +60,7 @@ export async function handleSubscription(payload: WebhookSubscriptionActivePaylo
     const subData = payload.data;
 
     // First, ensure the product exists in the database
-    if (subData.productId && subData.product) {
-        await prisma.product.upsert({
-            where: { id: subData.productId },
-            update: {
-                modifiedAt: subData.product.modifiedAt ? new Date(subData.product.modifiedAt) : new Date(),
-                name: subData.product.name,
-                description: subData.product.description ?? '',
-                isRecurring: subData.product.isRecurring,
-                isArchived: subData.product.isArchived,
-                polarOrganizationId: subData.product.organizationId,
-                metadata: subData.product.metadata,
-                attachedCustomFields: subData.product.attachedCustomFields
-            },
-            create: {
-                id: subData.productId,
-                createdAt: new Date(subData.product.createdAt),
-                modifiedAt: subData.product.modifiedAt ? new Date(subData.product.modifiedAt) : new Date(),
-                name: subData.product.name,
-                description: subData.product.description ?? '',
-                isRecurring: subData.product.isRecurring,
-                isArchived: subData.product.isArchived,
-                polarOrganizationId: subData.product.organizationId,
-                metadata: subData.product.metadata,
-                attachedCustomFields: subData.product.attachedCustomFields
-            }
-        });
-    }
+    await handleProduct(payload);
 
     // Then create/update the subscription
     await prisma.subscription.upsert({
@@ -112,4 +99,81 @@ export async function handleSubscription(payload: WebhookSubscriptionActivePaylo
             customFieldData: subData.customFieldData
         }
     });
+}
+
+export async function handleProduct(payload: WebhookSubscriptionActivePayload | WebhookSubscriptionCanceledPayload | WebhookSubscriptionCreatedPayload | WebhookSubscriptionRevokedPayload | WebhookSubscriptionUpdatedPayload) {
+    if (!payload?.data) {
+        throw new Error("No data in payload");
+    }
+
+    const subData = payload.data;
+
+    // First, ensure the product exists in the database
+    if (subData.productId && subData.product) {
+        await prisma.product.upsert({
+            where: { id: subData.productId },
+            update: {
+                modifiedAt: subData.product.modifiedAt ? new Date(subData.product.modifiedAt) : new Date(),
+                name: subData.product.name,
+                description: subData.product.description ?? '',
+                isRecurring: subData.product.isRecurring,
+                isArchived: subData.product.isArchived,
+                polarOrganizationId: subData.product.organizationId,
+                metadata: subData.product.metadata,
+                attachedCustomFields: subData.product.attachedCustomFields
+            },
+            create: {
+                id: subData.productId,
+                createdAt: new Date(subData.product.createdAt),
+                modifiedAt: subData.product.modifiedAt ? new Date(subData.product.modifiedAt) : new Date(),
+                name: subData.product.name,
+                description: subData.product.description ?? '',
+                isRecurring: subData.product.isRecurring,
+                isArchived: subData.product.isArchived,
+                polarOrganizationId: subData.product.organizationId,
+                metadata: subData.product.metadata,
+                attachedCustomFields: subData.product.attachedCustomFields
+            }
+        });
+    }
+}
+
+// Functions to call accross the app
+export async function syncPolar(products: Product[]) {
+    for (const product of products) {
+        await prisma.product.upsert({
+            where: { id: product.id },
+            update: {
+                modifiedAt: product.modifiedAt ? new Date(product.modifiedAt) : new Date(),
+                name: product.name,
+                description: product.description ?? '',
+                isRecurring: product.isRecurring,
+                isArchived: product.isArchived,
+                polarOrganizationId: product.organizationId,
+                metadata: product.metadata,
+                attachedCustomFields: product.attachedCustomFields
+            },
+            create: {
+                id: product.id,
+                createdAt: new Date(product.createdAt),
+                modifiedAt: product.modifiedAt ? new Date(product.modifiedAt) : new Date(),
+                name: product.name,
+                description: product.description ?? '',
+                isRecurring: product.isRecurring,
+                isArchived: product.isArchived,
+                polarOrganizationId: product.organizationId,
+                metadata: product.metadata,
+                attachedCustomFields: product.attachedCustomFields
+            }
+        });
+    }
+    await syncFeatureLimits();
+}
+
+// Admin area functions
+export async function adminSyncPolar() {
+    const { result } = await polar.products.list({
+        organizationId: process.env.POLAR_ORGANIZATION_ID!,
+    });
+    await syncPolar(result.items);
 }

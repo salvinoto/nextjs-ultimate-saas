@@ -2,7 +2,7 @@
 
 import { getCurrentCustomer } from "./payments";
 import { featureDefinitions, type FeatureContext, type FeatureLimit } from "@/lib/plans/features";
-import { getFeatureUsage, updateFeatureUsage } from "@/lib/plans/db";
+import { getFeatureUsage, initializeFeatureUsage, updateFeatureUsage } from "@/lib/plans/db";
 import { plans } from "@/lib/plans/features";
 
 type FeatureKey = keyof typeof featureDefinitions;
@@ -59,6 +59,7 @@ const getFeatureLimit = (
 export const validateFeatureUsage = async (
     subscriptionId: string,
     organizationId: string,
+    userId: string,
     priceId: string,
     featureKey: FeatureKey,
     newUsage: number,
@@ -71,7 +72,8 @@ export const validateFeatureUsage = async (
         if (newUsage > 0) {
             await updateFeatureUsage({
                 subscriptionId,
-                organizationId,
+                ...(organizationId ? { organizationId } : {}),
+                ...(userId && !organizationId ? { userId } : {}),
                 featureName: [featureKey],
                 usage: newUsage,
                 limit
@@ -129,6 +131,9 @@ export async function withFeatureAccess<T extends any[] = any[], R = any>(
     handlers: FeatureAccessHandlers<T, R>
 ): Promise<(...args: T) => Promise<R>> {
     return async (...args: T) => {
+        const customer = await getCurrentCustomer();
+        params.organizationId = customer?.organization?.id;
+        params.userId = customer?.user?.id;
         const result = await hasFeatureAccess(
             params.subscriptionId,
             params.priceId,
@@ -176,12 +181,12 @@ export const hasFeatureAccess = async (
 
     // If no usage record exists yet, create one with 0 usage
     if (!usage) {
-        await updateFeatureUsage({
+
+        await initializeFeatureUsage({
             subscriptionId,
-            organizationId,
-            userId,
-            featureName: [featureKey],
-            usage: 0
+            organizationId: organizationId ?? undefined,
+            userId: userId ?? undefined,
+            features: [featureKey]
         });
         return { allowed: true, currentUsage: 0 };
     }
