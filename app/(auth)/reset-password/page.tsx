@@ -15,7 +15,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { client } from "@/lib/auth-client";
 import { AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { SetStateAction, useState } from "react";
 import { toast } from "sonner";
 
 export default function ResetPassword() {
@@ -54,7 +54,7 @@ export default function ResetPassword() {
 								<PasswordInput
 									id="password"
 									value={password}
-									onChange={(e) => setPassword(e.target.value)}
+									onChange={(e: { target: { value: SetStateAction<string>; }; }) => setPassword(e.target.value)}
 									autoComplete="password"
 									placeholder="Password"
 								/>
@@ -64,7 +64,7 @@ export default function ResetPassword() {
 								<PasswordInput
 									id="password"
 									value={confirmPassword}
-									onChange={(e) => setConfirmPassword(e.target.value)}
+									onChange={(e: { target: { value: SetStateAction<string>; }; }) => setConfirmPassword(e.target.value)}
 									autoComplete="password"
 									placeholder="Password"
 								/>

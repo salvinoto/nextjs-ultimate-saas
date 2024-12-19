@@ -22,7 +22,7 @@ import {
 import { Key, Loader2, TwitchIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { SetStateAction, useState } from "react";
 import { toast } from "sonner";
 
 export default function SignIn() {
@@ -67,7 +67,7 @@ export default function SignIn() {
 						<PasswordInput
 							id="password"
 							value={password}
-							onChange={(e) => setPassword(e.target.value)}
+							onChange={(e: { target: { value: SetStateAction<string>; }; }) => setPassword(e.target.value)}
 							autoComplete="password"
 							placeholder="Password"
 						/>
