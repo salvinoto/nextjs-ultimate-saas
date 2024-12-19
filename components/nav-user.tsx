@@ -29,16 +29,24 @@ import {
 } from "@/components/ui/sidebar"
 import { CaretSortIcon, ComponentPlaceholderIcon } from "@radix-ui/react-icons"
 import { client } from "@/lib/auth-client"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 export function NavUser({
 }: {
   }) {
   const { isMobile } = useSidebar()
+  const router = useRouter()
 
   const user = client.useSession().data?.user
 
   if (!user) {
     return null
+  }
+
+  const handleLogout = async () => {
+    await client.signOut()
+    router.push("/")
   }
 
   return (
@@ -92,21 +100,27 @@ export function NavUser({
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <BadgeCheck />
-                Account
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/account" className="flex items-center gap-2">
+                  <BadgeCheck />
+                  Account
+                </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <ComponentPlaceholderIcon />
-                Billing
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/billing" className="flex items-center gap-2">
+                  <ComponentPlaceholderIcon />
+                  Billing
+                </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Bell />
-                Notifications
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/notifications" className="flex items-center gap-2">
+                  <Bell />
+                  Notifications
+                </Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout}>
               <LogOut />
               Log out
             </DropdownMenuItem>
