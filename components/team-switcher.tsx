@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/sidebar"
 import { CaretSortIcon, PlusIcon } from "@radix-ui/react-icons"
 import { useActiveOrganization, useListOrganizations, organization } from "@/lib/auth-client"
-import { CreateOrganizationDialog } from "@/app/dashboard/organization-card"
+import { CreateOrganizationDialog } from "@/app/dashboard/account/organization-card"
 
 export function TeamSwitcher() {
   const { isMobile } = useSidebar()

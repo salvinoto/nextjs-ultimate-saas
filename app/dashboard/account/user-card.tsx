@@ -41,7 +41,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { SetStateAction, useState } from "react";
 import { toast } from "sonner";
 import { UAParser } from "ua-parser-js";
 import {
@@ -227,7 +227,7 @@ export default function UserCard(props: {
 											<div className="flex flex-col gap-2">
 												<PasswordInput
 													value={twoFaPassword}
-													onChange={(e) => setTwoFaPassword(e.target.value)}
+													onChange={(e: { target: { value: SetStateAction<string>; }; }) => setTwoFaPassword(e.target.value)}
 													placeholder="Enter Password"
 												/>
 												<Button
@@ -313,7 +313,7 @@ export default function UserCard(props: {
 												id="password"
 												placeholder="Password"
 												value={twoFaPassword}
-												onChange={(e) => setTwoFaPassword(e.target.value)}
+												onChange={(e: { target: { value: SetStateAction<string>; }; }) => setTwoFaPassword(e.target.value)}
 											/>
 										</div>
 									)}
@@ -472,21 +472,21 @@ function ChangePassword() {
 					<PasswordInput
 						id="current-password"
 						value={currentPassword}
-						onChange={(e) => setCurrentPassword(e.target.value)}
+						onChange={(e: { target: { value: SetStateAction<string>; }; }) => setCurrentPassword(e.target.value)}
 						autoComplete="new-password"
 						placeholder="Password"
 					/>
 					<Label htmlFor="new-password">New Password</Label>
 					<PasswordInput
 						value={newPassword}
-						onChange={(e) => setNewPassword(e.target.value)}
+						onChange={(e: { target: { value: SetStateAction<string>; }; }) => setNewPassword(e.target.value)}
 						autoComplete="new-password"
 						placeholder="New Password"
 					/>
 					<Label htmlFor="password">Confirm Password</Label>
 					<PasswordInput
 						value={confirmPassword}
-						onChange={(e) => setConfirmPassword(e.target.value)}
+						onChange={(e: { target: { value: SetStateAction<string>; }; }) => setConfirmPassword(e.target.value)}
 						autoComplete="new-password"
 						placeholder="Confirm Password"
 					/>
