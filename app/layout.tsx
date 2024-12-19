@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
-import { Wrapper, WrapperWithQuery } from "@/components/wrapper";
+import { WrapperWithQuery } from "@/components/wrapper";
 import { createMetadata } from "@/lib/metadata";
 
 export const metadata = createMetadata({
@@ -29,9 +29,7 @@ export default function RootLayout({
 			</head>
 			<body className={`${GeistSans.variable} ${GeistMono.variable} font-sans`}>
 				<ThemeProvider attribute="class" defaultTheme="dark">
-					<Wrapper>
-						<WrapperWithQuery>{children}</WrapperWithQuery>
-					</Wrapper>
+					<WrapperWithQuery>{children}</WrapperWithQuery>
 					<Toaster richColors closeButton />
 				</ThemeProvider>
 			</body>
