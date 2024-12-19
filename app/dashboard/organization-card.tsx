@@ -327,7 +327,7 @@ export function OrganizationCard(props: {
 	);
 }
 
-function CreateOrganizationDialog() {
+export function CreateOrganizationDialog() {
 	const [name, setName] = useState("");
 	const [slug, setSlug] = useState("");
 	const [loading, setLoading] = useState(false);
