@@ -1,11 +1,12 @@
 import { getCurrentSubscription } from '@/lib/plans/db'
 import { polar } from '@/polar'
-import { SubscriptionTable } from './subscription-table'
+import { SubscriptionCard } from './subscription-card';
 
 export default async function BillingPage() {
     const subscription = await getCurrentSubscription()
-    const subscriptions = await polar.customerPortal.subscriptions.list({
-        organizationId: process.env.POLAR_ORGANIZATION_ID!,
+    console.log(subscription?.id)
+    const polarSub = await polar.customerPortal.subscriptions.get({
+        id: subscription?.id!
     });
 
     const handleCancelSubscription = async (id: string) => {
@@ -18,10 +19,8 @@ export default async function BillingPage() {
     return (
         <div className="container mx-auto py-10">
             <h1 className="text-3xl font-bold mb-8">Billing</h1>
-            <SubscriptionTable
-                initialSubscriptions={subscriptions.result.items || []}
-                cancelSubscription={handleCancelSubscription}
-            />
+
+            <SubscriptionCard subscription={polarSub} cancelSubscription={handleCancelSubscription} />
         </div>
     )
 }
