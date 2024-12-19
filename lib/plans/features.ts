@@ -22,7 +22,7 @@ interface FeatureDefinition {
 const defineFeatures = <T extends Record<string, FeatureDefinition>>(features: T & Record<string, FeatureDefinition>): T => features;
 
 // Define available features with strict typing
-const featureDefinitions = defineFeatures({
+export const featureDefinitions = defineFeatures({
     serverStorage: {
         name: 'Server Storage',
         description: 'Storage for your server',

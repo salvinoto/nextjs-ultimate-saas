@@ -29,9 +29,9 @@ export const client = createAuthClient({
 		passkeyClient(),
 		adminClient(),
 		multiSessionClient(),
-		oneTapClient({
-			clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
-		}),
+		// oneTapClient({
+		// 	clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
+		// }),
 	],
 	fetchOptions: {
 		onError(e) {

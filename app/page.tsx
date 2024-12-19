@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { polar } from '@/polar'
 import { ProductCard } from '@/components/product-card'
 import { getCurrentSubscription } from '@/lib/plans/db'
+import { getCurrentCustomer } from "@/lib/payments";
 import { withFeatureAccess } from "@/lib/usage";
 
 export default async function Home() {
@@ -27,11 +28,14 @@ export default async function Home() {
 		isArchived: false,
 	})
 	const currentSubscription = await getCurrentSubscription()
+	
+	const currentCustomer = await getCurrentCustomer()
+
 	const ProtectedComponentFn = await withFeatureAccess(
 		{
 			subscriptionId: currentSubscription?.id!,
 			priceId: currentSubscription?.priceId!,
-			featureName: "Server Storage",
+			featureKey: "serverStorage",
 		},
 		{
 			onGranted: async () => (
@@ -94,7 +98,9 @@ export default async function Home() {
 							))}
 						</div>
 					</div>
+					{/* @ts-ignore */}
 					<Suspense fallback={<SignInFallback />}>
+						{/* @ts-ignore */}
 						<SignInButton />
 					</Suspense>
 					{currentSubscription?.productId && (
@@ -115,16 +121,15 @@ export default async function Home() {
 					{ProtectedComponent}
 					<div className="flex flex-col gap-y-32 pt-4">
 						<h1 className="text-5xl">Products</h1>
-						<div className={`grid gap-6 md:gap-8 lg:gap-12 ${
-							result.items.length === 1 ? 'grid-cols-1' :
-							result.items.length === 2 ? 'grid-cols-1 sm:grid-cols-2' :
-							result.items.length === 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' :
-							'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
-						}`}>
+						<div className={`grid gap-6 md:gap-8 lg:gap-12 ${result.items.length === 1 ? 'grid-cols-1' :
+								result.items.length === 2 ? 'grid-cols-1 sm:grid-cols-2' :
+									result.items.length === 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' :
+										'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+							}`}>
 							{result.items.map((product) => (
-								<ProductCard 
-									key={product.id} 
-									product={product} 
+								<ProductCard
+									key={product.id}
+									product={product}
 									currentSubscription={currentSubscription}
 								/>
 							))}

@@ -48,6 +48,7 @@ import {
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { adminSyncPolar } from "@/lib/payments";
 
 type User = {
 	id: string;
@@ -175,6 +176,18 @@ export default function AdminDashboard() {
 			});
 		} catch (error: any) {
 			toast.error(error.message || "Failed to ban user");
+		} finally {
+			setIsLoading(undefined);
+		}
+	};
+	// Handle Polar syncing
+	const handleSyncPolar = async () => {
+		setIsLoading("sync");
+		try {
+			await adminSyncPolar();
+			toast.success("Polar synced successfully");
+		} catch (error: any) {
+			toast.error(error.message || "Failed to sync Polar");
 		} finally {
 			setIsLoading(undefined);
 		}
@@ -332,6 +345,7 @@ export default function AdminDashboard() {
 							</form>
 						</DialogContent>
 					</Dialog>
+					<Button onClick={handleSyncPolar}>Sync Polar to Database</Button>
 				</CardHeader>
 				<CardContent>
 					{isUsersLoading ? (
@@ -422,7 +436,7 @@ export default function AdminDashboard() {
 																	onError(context) {
 																		toast.error(
 																			context.error.message ||
-																				"Failed to unban user",
+																			"Failed to unban user",
 																		);
 																		setIsLoading(undefined);
 																	},

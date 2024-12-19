@@ -18,7 +18,6 @@ import { addAccountToSession } from "./plugin";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { PrismaClient } from "@prisma/client";
 import { ac, owner as ownerRole, admin as adminRole, member as memberRole, myCustomRole } from "@/lib/permissions";
-import { polar } from "@/polar";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -145,7 +144,7 @@ export const auth = betterAuth({
 		bearer(),
 		admin(),
 		multiSession(),
-		oneTap(),
+		// oneTap(),
 		oAuthProxy(),
 		nextCookies(),
 		addAccountToSession,
