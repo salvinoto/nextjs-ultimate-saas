@@ -8,7 +8,8 @@
     "typecheck": "tsc --noEmit",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "serve": "echo '🔄 Starting ngrok...' && ngrok http --log=stdout --url=credible-subtly-earwig.ngrok-free.app 3000 > /dev/null 2>&1 & sleep 2 && echo '✅ ngrok ready!' && next dev"
   },
   "dependencies": {
     "@better-fetch/fetch": "1.1.12",
