@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import Link from 'next/link'
 import { polar } from '@/polar'
 import { ProductCard } from '@/components/product-card'
-import { getCurrentSubscription } from '@/lib/plans/db/features'
+import { getActiveSubscription } from '@/lib/plans/db/features'
 import { getCurrentCustomer } from "@/lib/payments";
 import { withFeatureAccess } from "@/lib/usage";
 
@@ -27,7 +27,7 @@ export default async function Home() {
 		organizationId: process.env.POLAR_ORGANIZATION_ID!,
 		isArchived: false,
 	})
-	const currentSubscription = await getCurrentSubscription()
+	const currentSubscription = await getActiveSubscription()
 	
 	const currentCustomer = await getCurrentCustomer()
 

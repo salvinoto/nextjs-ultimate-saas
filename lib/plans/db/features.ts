@@ -256,3 +256,61 @@ export const updateSubscriptionLimits = async () => {
 
     return Promise.all(limitUpdates);
 };
+
+/**
+ * Update feature limits for a specific subscription
+ */
+export const updateSubscriptionLimitById = async (subscriptionId: string) => {
+    const subscription = await prisma.subscription.findFirstOrThrow({
+        where: { 
+            id: subscriptionId,
+            status: 'active'
+        },
+        include: { product: true }
+    });
+
+    const plan = plans.find(p => p.priceId === subscription.priceId);
+    if (!plan) {
+        throw new Error(`No plan found for subscription: ${subscription.id}`);
+    }
+
+    const limitUpdates = plan.features
+        .map(feature => {
+            const featureKey = Object.keys(featureDefinitions).find(
+                key => featureDefinitions[key as FeatureKey].name === feature.name
+            ) as FeatureKey;
+
+            if (!featureKey) {
+                console.warn(`Feature not found: ${feature.name}`);
+                return null;
+            }
+
+            const defaultLimit = featureDefinitions[featureKey].defaultLimit;
+            const featureLimit = (feature.limits || defaultLimit) as FeatureLimit;
+
+            return prisma.featureLimit.upsert({
+                where: {
+                    subscriptionId_featureKey: {
+                        subscriptionId: subscription.id,
+                        featureKey
+                    }
+                },
+                update: {
+                    type: featureLimit.type,
+                    value: featureLimit.value ?? null,
+                    unit: featureLimit.unit ?? null,
+                    updatedAt: new Date()
+                },
+                create: {
+                    subscriptionId: subscription.id,
+                    featureKey,
+                    type: featureLimit.type,
+                    value: featureLimit.value ?? null,
+                    unit: featureLimit.unit ?? null
+                }
+            });
+        })
+        .filter((update): update is NonNullable<typeof update> => update !== null);
+
+    return Promise.all(limitUpdates);
+};

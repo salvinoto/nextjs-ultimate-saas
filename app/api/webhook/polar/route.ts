@@ -1,5 +1,5 @@
-import { handleSubscription } from "@/lib/payments";
-import { updateSubscriptionLimits, initializeFeatures } from "@/lib/plans/db/features";
+import { handleSubscription, syncPolar } from "@/lib/payments";
+import { updateSubscriptionLimits, initializeFeatures, updateSubscriptionLimitById } from "@/lib/plans/db/features";
 import { featureDefinitions } from "@/lib/plans/rule-set";
 import {
 	validateEvent,
@@ -65,12 +65,7 @@ export async function POST(request: NextRequest) {
 		// Subscription has been revoked/peroid has ended with no renewal
 		case "subscription.revoked":
 			await handleSubscription(webhookPayload);
-			await initializeFeatures({
-				subscriptionId: webhookPayload.data.priceId,
-				organizationId: webhookPayload.data.metadata?.organizationId as string,
-				userId: webhookPayload.data.metadata?.userId as string,
-				features: Object.keys(featureDefinitions) as (keyof typeof featureDefinitions)[],
-			});
+			await updateSubscriptionLimitById(webhookPayload.data.priceId as string);
 			break;
 
 		// Subscription has been explicitly canceled by the user
@@ -80,11 +75,15 @@ export async function POST(request: NextRequest) {
 
 		// Product has been created
 		case "product.created":
+			console.log("Product created", webhookPayload.data);
+			await syncPolar([webhookPayload.data]);
 			await updateSubscriptionLimits();
 			break;
 
 		// Product has been updated
 		case "product.updated":
+			console.log("Product updated", webhookPayload.data);
+			await syncPolar([webhookPayload.data]);
 			await updateSubscriptionLimits();
 			break;
 

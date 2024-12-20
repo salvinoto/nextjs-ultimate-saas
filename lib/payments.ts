@@ -1,10 +1,7 @@
 'use server';
 
-import { WebhookSubscriptionActivePayload } from "@polar-sh/sdk/models/components/webhooksubscriptionactivepayload";
-import { WebhookSubscriptionCanceledPayload } from "@polar-sh/sdk/models/components/webhooksubscriptioncanceledpayload";
-import { WebhookSubscriptionCreatedPayload } from "@polar-sh/sdk/models/components/webhooksubscriptioncreatedpayload";
-import { WebhookSubscriptionRevokedPayload } from "@polar-sh/sdk/models/components/webhooksubscriptionrevokedpayload";
-import { WebhookSubscriptionUpdatedPayload } from "@polar-sh/sdk/models/components/webhooksubscriptionupdatedpayload";
+import { WebhookSubscriptionActivePayload, WebhookSubscriptionCanceledPayload, WebhookSubscriptionCreatedPayload, WebhookSubscriptionRevokedPayload, WebhookSubscriptionUpdatedPayload } from "@polar-sh/sdk/models/components";
+import { WebhookProductCreatedPayload, WebhookProductUpdatedPayload } from "@polar-sh/sdk/models/components";
 import { Product } from "@polar-sh/sdk/models/components/product";
 import { linkSubscriptionToCustomer, upsertCustomer } from "@/lib/plans/db/customer";
 import { PrismaClient } from "@prisma/client";
@@ -105,7 +102,7 @@ export async function handleSubscription(payload: WebhookSubscriptionActivePaylo
 /**
  * Handle product creation or update from webhook
  */
-export async function handleProduct(payload: WebhookSubscriptionActivePayload | WebhookSubscriptionCanceledPayload | WebhookSubscriptionCreatedPayload | WebhookSubscriptionRevokedPayload | WebhookSubscriptionUpdatedPayload) {
+export async function handleProduct(payload: WebhookSubscriptionActivePayload | WebhookSubscriptionCanceledPayload | WebhookSubscriptionCreatedPayload | WebhookSubscriptionRevokedPayload | WebhookSubscriptionUpdatedPayload ) {
     if (!payload?.data) {
         throw new Error("No data in webhook payload");
     }

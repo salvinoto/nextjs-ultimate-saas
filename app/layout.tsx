@@ -10,8 +10,8 @@ import { createMetadata } from "@/lib/metadata";
 
 export const metadata = createMetadata({
 	title: {
-		template: "%s | Better Auth",
-		default: "Better Auth",
+		template: "%s | Next JS Ultimate SaaS Starter",
+		default: "Next JS Ultimate SaaS Starter",
 	},
 	description: "The most comprehensive authentication library for typescript",
 	metadataBase: new URL("https://demo.better-auth.com"),
