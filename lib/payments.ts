@@ -10,6 +10,7 @@ import { Product } from "@polar-sh/sdk/models/components/product";
 import {
     validateEvent,
 } from "@polar-sh/sdk/webhooks";
+import { linkSubscriptionToCustomer, upsertCustomer } from "@/lib/plans/db/customer";
 import { PrismaClient } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
@@ -98,6 +99,11 @@ export async function handleSubscription(payload: WebhookSubscriptionActivePaylo
             metadata: subData.metadata,
             customFieldData: subData.customFieldData
         }
+    });
+    await upsertCustomer(subData.customerId, subData.metadata.userId as string, subData.metadata.organizationId as string);
+    await linkSubscriptionToCustomer({
+        subscriptionId: subData.id,
+        polarCustomerId: subData.customerId,
     });
 }
 
