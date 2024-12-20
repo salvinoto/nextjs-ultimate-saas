@@ -161,7 +161,7 @@ export const initializeFeatures = async ({
                 lastUpdated: new Date(),
                 periodStart: period.start,
                 periodEnd: period.end,
-                resetFrequency: null
+                resetFrequency: feature?.limits?.resetFrequency
             };
         });
 

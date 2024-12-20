@@ -82,7 +82,6 @@ export const plans = [{
             limits: { 
                 ...featureDefinitions.serverStorage.defaultLimit,
                 value: 5,
-                resetFrequency: 'monthly'
             },
         }),
         assignFeature('apiRequests', {
@@ -90,7 +89,6 @@ export const plans = [{
             limits: {
                 ...featureDefinitions.apiRequests.defaultLimit,
                 value: 1000,
-                resetFrequency: 'daily'
             },
         })
     ],
@@ -110,7 +108,7 @@ export const plans = [{
             limits: {
                 ...featureDefinitions.apiRequests.defaultLimit,
                 value: 10000,
-                resetFrequency: 'weekly'
+                resetFrequency: 'monthly'
             },
         })
     ]
