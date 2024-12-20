@@ -1,5 +1,6 @@
 import { handleSubscription } from "@/lib/payments";
-import { syncFeatureLimits, updateFeatureUsage } from "@/lib/plans/db";
+import { syncFeatureLimits, updateFeatureUsage, initializeFeatureUsage } from "@/lib/plans/db/features";
+import { featureDefinitions } from "@/lib/plans/rule-set";
 import {
 	validateEvent,
 	WebhookVerificationError,
@@ -53,18 +54,23 @@ export async function POST(request: NextRequest) {
 		// Subscription has been activated
 		case "subscription.active":
 			await handleSubscription(webhookPayload);
-			await updateFeatureUsage({
+			await initializeFeatureUsage({
 				subscriptionId: webhookPayload.data.priceId,
 				organizationId: webhookPayload.data.metadata?.organizationId as string,
 				userId: webhookPayload.data.metadata?.userId as string,
-				featureName: ['serverStorage', 'apiRequests'],
-				usage: 0,
+				features: Object.keys(featureDefinitions) as (keyof typeof featureDefinitions)[],
 			});
 			break;
 
 		// Subscription has been revoked/peroid has ended with no renewal
 		case "subscription.revoked":
 			await handleSubscription(webhookPayload);
+			await initializeFeatureUsage({
+				subscriptionId: webhookPayload.data.priceId,
+				organizationId: webhookPayload.data.metadata?.organizationId as string,
+				userId: webhookPayload.data.metadata?.userId as string,
+				features: Object.keys(featureDefinitions) as (keyof typeof featureDefinitions)[],
+			});
 			break;
 
 		// Subscription has been explicitly canceled by the user

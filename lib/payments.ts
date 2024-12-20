@@ -5,26 +5,15 @@ import { WebhookSubscriptionCanceledPayload } from "@polar-sh/sdk/models/compone
 import { WebhookSubscriptionCreatedPayload } from "@polar-sh/sdk/models/components/webhooksubscriptioncreatedpayload";
 import { WebhookSubscriptionRevokedPayload } from "@polar-sh/sdk/models/components/webhooksubscriptionrevokedpayload";
 import { WebhookSubscriptionUpdatedPayload } from "@polar-sh/sdk/models/components/webhooksubscriptionupdatedpayload";
-import { WebhookProductCreatedPayload } from "@polar-sh/sdk/models/components";
 import { Product } from "@polar-sh/sdk/models/components/product";
-import {
-    validateEvent,
-} from "@polar-sh/sdk/webhooks";
 import { linkSubscriptionToCustomer, upsertCustomer } from "@/lib/plans/db/customer";
 import { PrismaClient } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { syncFeatureLimits, updateFeatureUsage } from "./plans/db";
+import { syncFeatureLimits, updateFeatureUsage } from "./plans/db/features";
 import { polar } from "@/polar";
 
 const prisma = new PrismaClient();
-
-let webhookPayload: ReturnType<typeof validateEvent>;
-
-type SubscriptionCustomFieldData = {
-    userId?: string;
-    organizationId?: string;
-};
 
 type CustomerResult = {
     organization: NonNullable<Awaited<ReturnType<typeof auth.api.getFullOrganization>>> | null;

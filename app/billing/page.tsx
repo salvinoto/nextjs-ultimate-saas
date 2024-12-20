@@ -1,4 +1,4 @@
-import { getCurrentSubscription } from '@/lib/plans/db'
+import { getCurrentSubscription } from '@/lib/plans/db/features'
 import { polar } from '@/polar'
 import { SubscriptionCard } from './subscription-card';
 

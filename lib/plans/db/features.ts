@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { featureDefinitions, type FeatureLimit, plans } from './features';
+import { featureDefinitions, type FeatureLimit, plans } from '../rule-set';
 import { getCurrentCustomer } from '@/lib/payments';
 
 type FeatureKey = keyof typeof featureDefinitions;

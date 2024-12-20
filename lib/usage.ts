@@ -1,9 +1,9 @@
 'use server';
 
 import { getCurrentCustomer } from "./payments";
-import { featureDefinitions, type FeatureContext, type FeatureLimit } from "@/lib/plans/features";
-import { getFeatureUsage, initializeFeatureUsage, updateFeatureUsage } from "@/lib/plans/db";
-import { plans } from "@/lib/plans/features";
+import { featureDefinitions, type FeatureContext, type FeatureLimit } from "@/lib/plans/rule-set";
+import { getFeatureUsage, initializeFeatureUsage, updateFeatureUsage } from "@/lib/plans/db/features";
+import { plans } from "@/lib/plans/rule-set";
 
 type FeatureKey = keyof typeof featureDefinitions;
 
@@ -181,7 +181,6 @@ export const hasFeatureAccess = async (
 
     // If no usage record exists yet, create one with 0 usage
     if (!usage) {
-
         await initializeFeatureUsage({
             subscriptionId,
             organizationId: organizationId ?? undefined,
