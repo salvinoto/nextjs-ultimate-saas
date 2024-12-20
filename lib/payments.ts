@@ -15,6 +15,7 @@ const prisma = new PrismaClient();
 type CustomerResult = {
     organization: NonNullable<Awaited<ReturnType<typeof auth.api.getFullOrganization>>> | null;
     user: NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>['user'];
+    customer: NonNullable<Awaited<ReturnType<typeof prisma.customer.findFirst>>> | null;
 } & (NonNullable<Awaited<ReturnType<typeof auth.api.getFullOrganization>>> | NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>['user']);
 
 /**
@@ -33,9 +34,21 @@ export async function getCurrentCustomer(): Promise<CustomerResult> {
     }
 
     const base = organization || session.user;
+
+    // Fetch the customer data based on user or organization
+    const customer = await prisma.customer.findFirst({
+        where: {
+            OR: [
+                { userId: session.user.id },
+                { organizationId: organization?.id }
+            ]
+        }
+    });
+
     const result = Object.assign(base, {
         organization: organization || null,
         user: session.user,
+        customer: customer || null,
     });
 
     return result as CustomerResult;

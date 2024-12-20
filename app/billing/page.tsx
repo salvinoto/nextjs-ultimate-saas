@@ -1,14 +1,17 @@
-import { getActiveSubscription } from '@/lib/plans/db/features'
+import { getCurrentCustomer } from '@/lib/payments';
 import { polar } from '@/polar'
-import { SubscriptionCard } from './subscription-card';
+import { redirect, RedirectType } from 'next/navigation';
 
 export default async function BillingPage() {
-    // const currentSubscription = await getActiveSubscription()
-    // const getCurrentCustomer
-    // currentSubscription.
-    // const result = await polar.customerSessions.create({
-    //     customerId: "<value>",
-    // });
+    const currentCustomer = await getCurrentCustomer()
 
-    // return 
+    if (!currentCustomer) {
+        return <div>No active customer found</div>
+    }
+
+    const session = await polar.customerSessions.create({
+        customerId: currentCustomer.customer?.polarCustomerId ?? '',
+    });
+
+    redirect("https://sandbox.polar.sh/next-js-payements/portal?customer_session_token=" + session.token, 'push' as RedirectType)
 }
