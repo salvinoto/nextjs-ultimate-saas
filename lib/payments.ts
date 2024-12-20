@@ -10,7 +10,7 @@ import { linkSubscriptionToCustomer, upsertCustomer } from "@/lib/plans/db/custo
 import { PrismaClient } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { syncFeatureLimits, updateFeatureUsage } from "./plans/db/features";
+import { updateSubscriptionLimits } from "./plans/db/features";
 import { polar } from "@/polar";
 
 const prisma = new PrismaClient();
@@ -20,16 +20,19 @@ type CustomerResult = {
     user: NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>['user'];
 } & (NonNullable<Awaited<ReturnType<typeof auth.api.getFullOrganization>>> | NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>['user']);
 
+/**
+ * Get the current customer from the session
+ */
 export async function getCurrentCustomer(): Promise<CustomerResult> {
     const session = await auth.api.getSession({
         headers: await headers()
-    })
+    });
     const organization = await auth.api.getFullOrganization({
         headers: await headers(),
     });
 
     if (!session) {
-        throw new Error("No session");
+        throw new Error("No session found");
     }
 
     const base = organization || session.user;
@@ -41,18 +44,20 @@ export async function getCurrentCustomer(): Promise<CustomerResult> {
     return result as CustomerResult;
 }
 
-// Webhook handlers
+/**
+ * Handle subscription events from webhook
+ */
 export async function handleSubscription(payload: WebhookSubscriptionActivePayload | WebhookSubscriptionCanceledPayload | WebhookSubscriptionCreatedPayload | WebhookSubscriptionRevokedPayload | WebhookSubscriptionUpdatedPayload) {
     if (!payload?.data) {
-        throw new Error("No data in payload");
+        throw new Error("No data in webhook payload");
     }
 
     const subData = payload.data;
 
-    // First, ensure the product exists in the database
+    // First, ensure the product exists
     await handleProduct(payload);
 
-    // Then create/update the subscription
+    // Then handle the subscription
     await prisma.subscription.upsert({
         where: { id: subData.id },
         update: {
@@ -89,6 +94,7 @@ export async function handleSubscription(payload: WebhookSubscriptionActivePaylo
             customFieldData: subData.customFieldData
         }
     });
+
     await upsertCustomer(subData.customerId, subData.metadata.userId as string, subData.metadata.organizationId as string);
     await linkSubscriptionToCustomer({
         subscriptionId: subData.id,
@@ -96,14 +102,16 @@ export async function handleSubscription(payload: WebhookSubscriptionActivePaylo
     });
 }
 
+/**
+ * Handle product creation or update from webhook
+ */
 export async function handleProduct(payload: WebhookSubscriptionActivePayload | WebhookSubscriptionCanceledPayload | WebhookSubscriptionCreatedPayload | WebhookSubscriptionRevokedPayload | WebhookSubscriptionUpdatedPayload) {
     if (!payload?.data) {
-        throw new Error("No data in payload");
+        throw new Error("No data in webhook payload");
     }
 
     const subData = payload.data;
 
-    // First, ensure the product exists in the database
     if (subData.productId && subData.product) {
         await prisma.product.upsert({
             where: { id: subData.productId },
@@ -133,7 +141,9 @@ export async function handleProduct(payload: WebhookSubscriptionActivePayload | 
     }
 }
 
-// Functions to call accross the app
+/**
+ * Sync products from Polar to local database
+ */
 export async function syncPolar(products: Product[]) {
     for (const product of products) {
         await prisma.product.upsert({
@@ -162,10 +172,12 @@ export async function syncPolar(products: Product[]) {
             }
         });
     }
-    await syncFeatureLimits();
+    await updateSubscriptionLimits();
 }
 
-// Admin area functions
+/**
+ * Admin function to sync all products from Polar
+ */
 export async function adminSyncPolar() {
     const { result } = await polar.products.list({
         organizationId: process.env.POLAR_ORGANIZATION_ID!,

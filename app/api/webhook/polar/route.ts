@@ -1,5 +1,5 @@
 import { handleSubscription } from "@/lib/payments";
-import { syncFeatureLimits, updateFeatureUsage, initializeFeatureUsage } from "@/lib/plans/db/features";
+import { updateSubscriptionLimits, initializeFeatures } from "@/lib/plans/db/features";
 import { featureDefinitions } from "@/lib/plans/rule-set";
 import {
 	validateEvent,
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
 		// Subscription has been activated
 		case "subscription.active":
 			await handleSubscription(webhookPayload);
-			await initializeFeatureUsage({
+			await initializeFeatures({
 				subscriptionId: webhookPayload.data.priceId,
 				organizationId: webhookPayload.data.metadata?.organizationId as string,
 				userId: webhookPayload.data.metadata?.userId as string,
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
 		// Subscription has been revoked/peroid has ended with no renewal
 		case "subscription.revoked":
 			await handleSubscription(webhookPayload);
-			await initializeFeatureUsage({
+			await initializeFeatures({
 				subscriptionId: webhookPayload.data.priceId,
 				organizationId: webhookPayload.data.metadata?.organizationId as string,
 				userId: webhookPayload.data.metadata?.userId as string,
@@ -80,12 +80,12 @@ export async function POST(request: NextRequest) {
 
 		// Product has been created
 		case "product.created":
-			await syncFeatureLimits();
+			await updateSubscriptionLimits();
 			break;
 
 		// Product has been updated
 		case "product.updated":
-			await syncFeatureLimits();
+			await updateSubscriptionLimits();
 			break;
 
 		default:
