@@ -45,71 +45,99 @@ export async function getCurrentCustomer(): Promise<CustomerResult> {
  * Handle subscription events from webhook
  */
 export async function handleSubscription(payload: WebhookSubscriptionActivePayload | WebhookSubscriptionCanceledPayload | WebhookSubscriptionCreatedPayload | WebhookSubscriptionRevokedPayload | WebhookSubscriptionUpdatedPayload) {
-    if (!payload?.data) {
-        throw new Error("No data in webhook payload");
+    if (!payload || !payload.data) {
+        console.error('Invalid payload in handleSubscription:', payload);
+        throw new Error("Invalid webhook payload");
     }
 
     const subData = payload.data;
+    console.log('Processing subscription data:', JSON.stringify(subData, null, 2));
 
-    // First, ensure the product exists
-    await handleProduct(payload);
-
-    // Then handle the subscription
-    await prisma.subscription.upsert({
-        where: { id: subData.id },
-        update: {
-            modifiedAt: subData.modifiedAt ? new Date(subData.modifiedAt) : new Date(),
-            status: subData.status,
-            currentPeriodStart: new Date(subData.currentPeriodStart),
-            currentPeriodEnd: new Date(subData.currentPeriodEnd!),
-            cancelAtPeriodEnd: subData.cancelAtPeriodEnd,
-            endedAt: subData.endedAt ? new Date(subData.endedAt) : null,
-            metadata: subData.metadata,
-            customFieldData: subData.customFieldData,
-            productId: subData.productId
-        },
-        create: {
-            id: subData.id,
-            createdAt: new Date(subData.createdAt!),
-            modifiedAt: subData.modifiedAt ? new Date(subData.modifiedAt) : new Date(),
-            userId: subData.metadata.userId as string,
-            organizationId: subData.metadata.organizationId as string,
-            amount: subData.amount!,
-            currency: subData.currency!,
-            recurringInterval: subData.recurringInterval,
-            status: subData.status,
-            currentPeriodStart: new Date(subData.currentPeriodStart),
-            currentPeriodEnd: new Date(subData.currentPeriodEnd!),
-            cancelAtPeriodEnd: subData.cancelAtPeriodEnd,
-            startedAt: new Date(subData.startedAt!),
-            endedAt: subData.endedAt ? new Date(subData.endedAt) : null,
-            productId: subData.productId,
-            priceId: subData.priceId,
-            discountId: subData.discountId,
-            checkoutId: subData.checkoutId,
-            metadata: subData.metadata,
-            customFieldData: subData.customFieldData
+    try {
+        // First, ensure the product exists if we have product data
+        if (subData.productId && subData.product) {
+            try {
+                await handleProduct(payload);
+            } catch (error) {
+                console.error('Error handling product:', error);
+                // Continue with subscription handling even if product fails
+            }
         }
-    });
 
-    await upsertCustomer(subData.customerId, subData.metadata.userId as string, subData.metadata.organizationId as string);
-    await linkSubscriptionToCustomer({
-        subscriptionId: subData.id,
-        polarCustomerId: subData.customerId,
-    });
+        // Then handle the subscription
+        const subscription = await prisma.subscription.upsert({
+            where: { id: subData.id },
+            update: {
+                modifiedAt: subData.modifiedAt ? new Date(subData.modifiedAt) : new Date(),
+                status: subData.status,
+                currentPeriodStart: new Date(subData.currentPeriodStart),
+                currentPeriodEnd: new Date(subData.currentPeriodEnd!),
+                cancelAtPeriodEnd: subData.cancelAtPeriodEnd,
+                endedAt: subData.endedAt ? new Date(subData.endedAt) : null,
+                metadata: subData.metadata,
+                customFieldData: subData.customFieldData,
+                productId: subData.productId
+            },
+            create: {
+                id: subData.id,
+                createdAt: new Date(subData.createdAt!),
+                modifiedAt: subData.modifiedAt ? new Date(subData.modifiedAt) : new Date(),
+                userId: subData.metadata.userId as string,
+                organizationId: subData.metadata.organizationId as string,
+                amount: subData.amount!,
+                currency: subData.currency!,
+                recurringInterval: subData.recurringInterval,
+                status: subData.status,
+                currentPeriodStart: new Date(subData.currentPeriodStart),
+                currentPeriodEnd: new Date(subData.currentPeriodEnd!),
+                cancelAtPeriodEnd: subData.cancelAtPeriodEnd,
+                startedAt: new Date(subData.startedAt!),
+                endedAt: subData.endedAt ? new Date(subData.endedAt) : null,
+                productId: subData.productId,
+                priceId: subData.priceId,
+                discountId: subData.discountId,
+                checkoutId: subData.checkoutId,
+                metadata: subData.metadata,
+                customFieldData: subData.customFieldData
+            }
+        });
+
+        // Try to upsert customer and link subscription, but don't fail if these operations fail
+        try {
+            await upsertCustomer(subData.customerId, subData.metadata.userId as string, subData.metadata.organizationId as string);
+            await linkSubscriptionToCustomer({
+                subscriptionId: subData.id,
+                polarCustomerId: subData.customerId,
+            });
+        } catch (error) {
+            console.error('Error handling customer operations:', error);
+            // Continue since the main subscription operation succeeded
+        }
+
+        return subscription;
+    } catch (error) {
+        console.error('Error handling subscription:', error);
+        throw error;
+    }
 }
 
 /**
  * Handle product creation or update from webhook
  */
-export async function handleProduct(payload: WebhookSubscriptionActivePayload | WebhookSubscriptionCanceledPayload | WebhookSubscriptionCreatedPayload | WebhookSubscriptionRevokedPayload | WebhookSubscriptionUpdatedPayload ) {
-    if (!payload?.data) {
-        throw new Error("No data in webhook payload");
+export async function handleProduct(payload: WebhookSubscriptionActivePayload | WebhookSubscriptionCanceledPayload | WebhookSubscriptionCreatedPayload | WebhookSubscriptionRevokedPayload | WebhookSubscriptionUpdatedPayload) {
+    if (!payload || !payload.data) {
+        console.error('Invalid payload in handleProduct:', payload);
+        throw new Error("Invalid webhook payload");
     }
 
     const subData = payload.data;
 
-    if (subData.productId && subData.product) {
+    if (!subData.productId || !subData.product) {
+        console.log('No product data in payload, skipping product handling');
+        return;
+    }
+
+    try {
         await prisma.product.upsert({
             where: { id: subData.productId },
             update: {
@@ -135,6 +163,9 @@ export async function handleProduct(payload: WebhookSubscriptionActivePayload | 
                 attachedCustomFields: subData.product.attachedCustomFields
             }
         });
+    } catch (error) {
+        console.error('Error upserting product:', error);
+        throw error;
     }
 }
 

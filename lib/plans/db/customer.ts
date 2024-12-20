@@ -58,21 +58,37 @@ export async function linkSubscriptionToCustomer({
     subscriptionId: string
     polarCustomerId: string
 }) {
-    const customer = await prisma.customer.findUnique({
-        where: { polarCustomerId },
-    })
+    try {
+        const customer = await prisma.customer.findUnique({
+            where: { polarCustomerId },
+        });
 
-    if (!customer) {
-        throw new Error('Customer not found')
+        if (!customer) {
+            console.log('Customer not found, skipping subscription link');
+            return null;
+        }
+
+        const subscription = await prisma.subscription.findUnique({
+            where: { id: subscriptionId },
+        });
+
+        if (!subscription) {
+            console.log('Subscription not found, skipping link');
+            return null;
+        }
+
+        return await prisma.subscription.update({
+            where: { id: subscriptionId },
+            data: {
+                customerId: customer.id,
+            },
+            include: {
+                customer: true,
+            },
+        });
+    } catch (error) {
+        console.error('Error linking subscription to customer:', error);
+        // Don't throw, just return null since this is a non-critical operation
+        return null;
     }
-
-    return await prisma.subscription.update({
-        where: { id: subscriptionId },
-        data: {
-            customerId: customer.id,
-        },
-        include: {
-            customer: true,
-        },
-    })
 }

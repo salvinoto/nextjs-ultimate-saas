@@ -68,6 +68,7 @@ export const recordFeatureUsage = async ({
             update: {
                 currentUsage: usage,
                 lastUpdated: new Date(),
+                resetFrequency: limit?.resetFrequency,
                 ...(organizationId ? { organizationId } : { userId })
             },
             create: {
@@ -77,6 +78,7 @@ export const recordFeatureUsage = async ({
                 featureName: name,
                 currentUsage: usage,
                 unit: limit?.unit,
+                resetFrequency: limit?.resetFrequency,
                 periodStart: period.start,
                 periodEnd: period.end
             }
@@ -118,48 +120,59 @@ export const initializeFeatures = async ({
     userId,
     features
 }: BaseUsageParams & { features: FeatureKey[] }) => {
-    if (!organizationId && !userId) {
-        throw new Error('Either organizationId or userId must be provided');
+    try {
+        if (!organizationId && !userId) {
+            throw new Error('Either organizationId or userId must be provided');
+        }
+
+        if (organizationId && userId) {
+            throw new Error('Provide either organizationId or userId, not both');
+        }
+
+        const period = getBillingPeriod();
+
+        const subscription = await prisma.subscription.findUnique({
+            where: { id: subscriptionId },
+            select: { priceId: true }
+        });
+
+        if (!subscription) {
+            console.log(`No subscription found with ID: ${subscriptionId}`);
+            return null;
+        }
+
+        const plan = plans.find(p => p.priceId === subscription.priceId);
+        if (!plan) {
+            console.log(`No plan found for price ID: ${subscription.priceId}`);
+            return null;
+        }
+
+        const featureUsageData = features.map(featureKey => {
+            const featureName = featureDefinitions[featureKey].name;
+            const feature = plan.features.find(f => f.name === featureName);
+
+            return {
+                featureName,
+                subscriptionId,
+                organizationId,
+                userId,
+                currentUsage: 0,
+                unit: feature?.limits?.unit,
+                lastUpdated: new Date(),
+                periodStart: period.start,
+                periodEnd: period.end,
+                resetFrequency: null
+            };
+        });
+
+        return prisma.featureUsage.createMany({
+            data: featureUsageData,
+            skipDuplicates: true,
+        });
+    } catch (error) {
+        console.error('Error initializing features:', error);
+        return null;
     }
-
-    if (organizationId && userId) {
-        throw new Error('Provide either organizationId or userId, not both');
-    }
-
-    const period = getBillingPeriod();
-
-    const subscription = await prisma.subscription.findUniqueOrThrow({
-        where: { id: subscriptionId },
-        select: { priceId: true }
-    });
-
-    const plan = plans.find(p => p.priceId === subscription.priceId);
-    if (!plan) {
-        throw new Error(`No plan found for price ID: ${subscription.priceId}`);
-    }
-
-    const featureUsageData = features.map(featureKey => {
-        const featureName = featureDefinitions[featureKey].name;
-        const feature = plan.features.find(f => f.name === featureName);
-
-        return {
-            featureName,
-            subscriptionId,
-            organizationId,
-            userId,
-            currentUsage: 0,
-            unit: feature?.limits?.unit,
-            lastUpdated: new Date(),
-            periodStart: period.start,
-            periodEnd: period.end,
-            resetFrequency: null
-        };
-    });
-
-    return prisma.featureUsage.createMany({
-        data: featureUsageData,
-        skipDuplicates: true,
-    });
 };
 
 /**
@@ -172,7 +185,7 @@ export async function getActiveSubscription() {
     }
 
     const currentDate = new Date();
-    
+
     return prisma.subscription.findFirst({
         where: {
             OR: [
@@ -261,56 +274,67 @@ export const updateSubscriptionLimits = async () => {
  * Update feature limits for a specific subscription
  */
 export const updateSubscriptionLimitById = async (subscriptionId: string) => {
-    const subscription = await prisma.subscription.findFirstOrThrow({
-        where: { 
-            id: subscriptionId,
-            status: 'active'
-        },
-        include: { product: true }
-    });
+    try {
+        const subscription = await prisma.subscription.findFirst({
+            where: {
+                id: subscriptionId,
+                status: 'active'
+            },
+            include: { product: true }
+        });
 
-    const plan = plans.find(p => p.priceId === subscription.priceId);
-    if (!plan) {
-        throw new Error(`No plan found for subscription: ${subscription.id}`);
-    }
+        if (!subscription) {
+            console.log(`No active subscription found with ID: ${subscriptionId}`);
+            return [];
+        }
 
-    const limitUpdates = plan.features
-        .map(feature => {
-            const featureKey = Object.keys(featureDefinitions).find(
-                key => featureDefinitions[key as FeatureKey].name === feature.name
-            ) as FeatureKey;
+        const plan = plans.find(p => p.priceId === subscription.priceId);
+        if (!plan) {
+            console.log(`No plan found for subscription: ${subscription.id}`);
+            return [];
+        }
 
-            if (!featureKey) {
-                console.warn(`Feature not found: ${feature.name}`);
-                return null;
-            }
+        const limitUpdates = plan.features
+            .map(feature => {
+                const featureKey = Object.keys(featureDefinitions).find(
+                    key => featureDefinitions[key as FeatureKey].name === feature.name
+                ) as FeatureKey;
 
-            const defaultLimit = featureDefinitions[featureKey].defaultLimit;
-            const featureLimit = (feature.limits || defaultLimit) as FeatureLimit;
-
-            return prisma.featureLimit.upsert({
-                where: {
-                    subscriptionId_featureKey: {
-                        subscriptionId: subscription.id,
-                        featureKey
-                    }
-                },
-                update: {
-                    type: featureLimit.type,
-                    value: featureLimit.value ?? null,
-                    unit: featureLimit.unit ?? null,
-                    updatedAt: new Date()
-                },
-                create: {
-                    subscriptionId: subscription.id,
-                    featureKey,
-                    type: featureLimit.type,
-                    value: featureLimit.value ?? null,
-                    unit: featureLimit.unit ?? null
+                if (!featureKey) {
+                    console.warn(`Feature not found: ${feature.name}`);
+                    return null;
                 }
-            });
-        })
-        .filter((update): update is NonNullable<typeof update> => update !== null);
 
-    return Promise.all(limitUpdates);
+                const defaultLimit = featureDefinitions[featureKey].defaultLimit;
+                const featureLimit = (feature.limits || defaultLimit) as FeatureLimit;
+
+                return prisma.featureLimit.upsert({
+                    where: {
+                        subscriptionId_featureKey: {
+                            subscriptionId: subscription.id,
+                            featureKey
+                        }
+                    },
+                    update: {
+                        type: featureLimit.type,
+                        value: featureLimit.value ?? null,
+                        unit: featureLimit.unit ?? null,
+                        updatedAt: new Date()
+                    },
+                    create: {
+                        subscriptionId: subscription.id,
+                        featureKey,
+                        type: featureLimit.type,
+                        value: featureLimit.value ?? null,
+                        unit: featureLimit.unit ?? null
+                    }
+                });
+            })
+            .filter((update): update is NonNullable<typeof update> => update !== null);
+
+        return Promise.all(limitUpdates);
+    } catch (error) {
+        console.error('Error updating subscription limits:', error);
+        return [];
+    }
 };

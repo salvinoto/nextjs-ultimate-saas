@@ -3,11 +3,13 @@ export type StorageUnit = 'MB' | 'GB';
 export type CountUnit = 'items';
 export type LimitUnit = StorageUnit | CountUnit;
 export type LimitType = 'unlimited' | 'count' | 'storage';
+export type ResetFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
 export interface FeatureLimit {
     readonly type: LimitType;
     readonly value?: number;
     readonly unit?: LimitUnit;
+    readonly resetFrequency?: ResetFrequency;
 }
 
 // Strongly typed feature definition interface
@@ -26,13 +28,13 @@ export const featureDefinitions = defineFeatures({
     serverStorage: {
         name: 'Server Storage',
         description: 'Storage for your server',
-        defaultLimit: { type: 'storage', unit: 'GB' },
-        dependencies: []
+        defaultLimit: { type: 'storage', unit: 'GB', resetFrequency: 'monthly' },
+        dependencies: [],
     },
     apiRequests: {
         name: 'API Requests',
         description: 'Number of API requests per month',
-        defaultLimit: { type: 'count', unit: 'items' },
+        defaultLimit: { type: 'count', unit: 'items', resetFrequency: 'monthly' },
         dependencies: ['serverStorage']
     }
 } as const);
@@ -72,29 +74,44 @@ const assignFeature = <K extends FeatureKey>(
 
 // Define plans with strict typing
 export const plans = [{
-    name: 'free',
-    priceId: '',
+    name: 'Starter',
+    priceId: '20fe5b7a-3f89-4b25-932f-101c9cba93d5',
     features: [
         assignFeature('serverStorage', {
             enabled: true,
-            limits: { ...featureDefinitions.serverStorage.defaultLimit, value: 5 }
+            limits: { 
+                ...featureDefinitions.serverStorage.defaultLimit,
+                value: 5,
+                resetFrequency: 'monthly'
+            },
         }),
         assignFeature('apiRequests', {
             enabled: true,
-            limits: { ...featureDefinitions.apiRequests.defaultLimit, value: 1000 }
+            limits: {
+                ...featureDefinitions.apiRequests.defaultLimit,
+                value: 1000,
+                resetFrequency: 'daily'
+            },
         })
     ],
 }, {
-    name: 'premium',
-    priceId: 'ea4598ba-c048-4f9b-af52-77f39a3ea40a',
+    name: 'Ultimate',
+    priceId: 'c73a2acc-e799-417a-881d-730a8dae084a',
     features: [
         assignFeature('serverStorage', {
             enabled: true,
-            limits: { ...featureDefinitions.serverStorage.defaultLimit, value: 10 }
+            limits: {
+                ...featureDefinitions.serverStorage.defaultLimit,
+                value: 10
+            },
         }),
         assignFeature('apiRequests', {
             enabled: true,
-            limits: { ...featureDefinitions.apiRequests.defaultLimit, value: 10000 }
+            limits: {
+                ...featureDefinitions.apiRequests.defaultLimit,
+                value: 10000,
+                resetFrequency: 'weekly'
+            },
         })
     ]
 }] as const;
