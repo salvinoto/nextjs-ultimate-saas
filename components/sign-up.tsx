@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { DiscordLogoIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
-import { useState } from "react";
+import { SetStateAction, useState } from "react";
 import { client, signIn, signUp } from "@/lib/auth-client";
 import Image from "next/image";
 import { Loader2, X } from "lucide-react";
@@ -97,7 +97,7 @@ export function SignUp() {
 						<PasswordInput
 							id="password"
 							value={password}
-							onChange={(e) => setPassword(e.target.value)}
+							onChange={(e: { target: { value: SetStateAction<string>; }; }) => setPassword(e.target.value)}
 							autoComplete="new-password"
 							placeholder="Password"
 						/>
@@ -107,7 +107,7 @@ export function SignUp() {
 						<PasswordInput
 							id="password_confirmation"
 							value={passwordConfirmation}
-							onChange={(e) => setPasswordConfirmation(e.target.value)}
+							onChange={(e: { target: { value: SetStateAction<string>; }; }) => setPasswordConfirmation(e.target.value)}
 							autoComplete="new-password"
 							placeholder="Confirm Password"
 						/>

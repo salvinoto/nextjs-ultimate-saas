@@ -1,9 +1,9 @@
 'use server';
 
 import { getCurrentCustomer } from "./payments";
-import { featureDefinitions, type FeatureContext, type FeatureLimit } from "@/lib/plans/features";
-import { getFeatureUsage, initializeFeatureUsage, updateFeatureUsage } from "@/lib/plans/db";
-import { plans } from "@/lib/plans/features";
+import { featureDefinitions, type FeatureContext, type FeatureLimit } from "@/lib/plans/rule-set";
+import { getFeatureUsage, initializeFeatures, recordFeatureUsage } from "@/lib/plans/db/features";
+import { plans } from "@/lib/plans/rule-set";
 
 type FeatureKey = keyof typeof featureDefinitions;
 
@@ -70,13 +70,11 @@ export const validateFeatureUsage = async (
     // If no limit or unlimited, update usage and allow
     if (!limit || limit.type === 'unlimited') {
         if (newUsage > 0) {
-            await updateFeatureUsage({
+            await recordFeatureUsage({
                 subscriptionId,
                 ...(organizationId ? { organizationId } : {}),
                 ...(userId && !organizationId ? { userId } : {}),
-                featureName: [featureKey],
-                usage: newUsage,
-                limit
+                features: [{ name: featureKey, usage: newUsage, limit }]
             });
         }
         return { allowed: true, currentUsage: newUsage };
@@ -92,12 +90,10 @@ export const validateFeatureUsage = async (
     }
 
     // Update usage in database
-    await updateFeatureUsage({
+    await recordFeatureUsage({
         subscriptionId,
         organizationId,
-        featureName: [featureKey],
-        usage: newUsage,
-        limit
+        features: [{ name: featureKey, usage: newUsage, limit }]
     });
 
     return { allowed: true, currentUsage: newUsage };
@@ -181,11 +177,10 @@ export const hasFeatureAccess = async (
 
     // If no usage record exists yet, create one with 0 usage
     if (!usage) {
-
-        await initializeFeatureUsage({
+        await initializeFeatures({
             subscriptionId,
-            organizationId: organizationId ?? undefined,
-            userId: userId ?? undefined,
+            organizationId,
+            userId,
             features: [featureKey]
         });
         return { allowed: true, currentUsage: 0 };

@@ -35,6 +35,7 @@ model User {
   passkeys         Passkey[]
   Subscription     Subscription[]
   FeatureUsage     FeatureUsage[]
+  customers        Customer[]
 
   @@unique([email])
   @@map("user")
@@ -99,6 +100,7 @@ model Organization {
   invitations  Invitation[]
   Subscription Subscription[]
   FeatureUsage FeatureUsage[]
+  customers    Customer[]
 
   @@unique([slug])
   @@map("organization")
@@ -180,6 +182,8 @@ model Subscription {
   checkoutId         String?
   metadata           Json?
   customFieldData    Json?
+  customerId         String?
+  customer           Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
   FeatureUsage       FeatureUsage[]
   FeatureLimit       FeatureLimit[]
 
@@ -234,47 +238,24 @@ model Product {
   isArchived           Boolean
   polarOrganizationId  String // ID from Polar's data
   metadata             Json?
-  prices               Price[]
-  benefits             Benefit[]
   attachedCustomFields Json?
   Subscription         Subscription[]
 
   @@map("product")
 }
 
-// Can remove below in future
+model Customer {
+  id              String         @id @default(cuid())
+  polarCustomerId String         @unique
+  userId          String?
+  user            User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId  String?
+  organization    Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscriptions   Subscription[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
-model Price {
-  id                String   @id
-  createdAt         DateTime
-  modifiedAt        DateTime
-  amountType        String
-  isArchived        Boolean
-  productId         String
-  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  priceCurrency     String
-  priceAmount       Int
-  type              String
-  recurringInterval String?
-
-  @@map("price")
-}
-
-// Benefit also references Polar's organization, stored as polarOrganizationId,
-// not related to your internal Organization model.
-
-model Benefit {
-  id                  String   @id
-  createdAt           DateTime
-  modifiedAt          DateTime
-  type                String
-  description         String
-  selectable          Boolean
-  deletable           Boolean
-  polarOrganizationId String
-  productId           String
-  product             Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  properties          Json?
-
-  @@map("benefit")
+  @@index([userId])
+  @@index([organizationId])
+  @@map("customer")
 }

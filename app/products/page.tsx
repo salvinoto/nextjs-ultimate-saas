@@ -7,7 +7,7 @@ interface ProductCardProps {
 	product: Product;
 }
 
-export const ProductCard = ({ product }: ProductCardProps) => {
+const ProductCard = ({ product }: ProductCardProps) => {
 	// Handling just a single price for now
 	// Remember to handle multiple prices for products if you support monthly & yearly pricing plans
 	const firstPrice = product.prices[0];
