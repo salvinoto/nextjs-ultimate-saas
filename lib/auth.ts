@@ -4,12 +4,12 @@ import {
   admin,
   multiSession,
   organization,
-  passkey,
   twoFactor,
   oneTap,
   oAuthProxy,
   openAPI,
 } from "better-auth/plugins";
+import { passkey } from "better-auth/plugins/passkey";
 import { reactInvitationEmail } from "./email/invitation";
 import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";

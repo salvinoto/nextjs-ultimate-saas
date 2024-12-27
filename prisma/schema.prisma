@@ -155,6 +155,8 @@ model Passkey {
   transports     String?
   createdAt      DateTime?
 
+  credentialID String
+
   @@map("passkey")
 }
 
