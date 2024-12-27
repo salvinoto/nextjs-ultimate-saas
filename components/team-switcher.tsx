@@ -36,9 +36,9 @@ export function TeamSwitcher() {
             >
               <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
                 {activeOrganization?.logo ? (
-                  <img 
-                    src={activeOrganization.logo} 
-                    alt={activeOrganization.name} 
+                  <img
+                    src={activeOrganization.logo}
+                    alt={activeOrganization.name}
                     className="size-4 rounded"
                   />
                 ) : (
@@ -94,7 +94,7 @@ export function TeamSwitcher() {
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
-            <DropdownMenuItem 
+            <DropdownMenuItem
               className="gap-2 p-2"
               onClick={() => setShowCreateDialog(true)}
             >
