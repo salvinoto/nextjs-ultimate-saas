@@ -57,7 +57,7 @@ export function UpgradePrompt({
           <AlertTriangle className="h-5 w-5 text-yellow-500 shrink-0" />
           <div>
             <p className="text-sm font-medium">{title || defaultTitle}</p>
-            {usageStatus?.limit !== null && (
+            {usageStatus && usageStatus.limit !== null && (
               <p className="text-xs text-muted-foreground">
                 {usageStatus.current.toLocaleString()} /{" "}
                 {usageStatus.limit.toLocaleString()} used
@@ -93,7 +93,7 @@ export function UpgradePrompt({
           <p className="text-sm text-muted-foreground">
             {description || defaultDescription}
           </p>
-          {usageStatus?.limit !== null && (
+          {usageStatus && usageStatus.limit !== null && (
             <div className="text-sm">
               <span className="font-medium">
                 {usageStatus.current.toLocaleString()}
