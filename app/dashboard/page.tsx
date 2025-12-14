@@ -3,9 +3,8 @@ import { Suspense } from "react";
 import Link from 'next/link'
 import { polar } from '@/polar'
 import { ProductCard } from '@/components/product-card'
-import { getActiveSubscription } from '@/lib/plans/db/features'
-import { getCurrentCustomer } from "@/lib/payments";
-import { withFeatureAccess } from "@/lib/usage";
+import { getActiveSubscription, getCurrentCustomer } from "@/lib/payments";
+import { checkCurrentLimit, getAllUsage } from "@/lib/metering";
 
 export const dynamic = 'force-dynamic'
 
@@ -22,45 +21,25 @@ export default async function Home() {
 		"Session Management",
 		"Prisma Database",
 		"Payments with Polar",
-		"Subscription Permissions with Metering"
-
+		"Usage-Based Billing with Polar Meters"
 	];
+
 	const { result } = await polar.products.list({
 		organizationId: process.env.POLAR_ORGANIZATION_ID!,
 		isArchived: false,
 	})
-	const currentSubscription = await getActiveSubscription()
 	
+	const currentSubscription = await getActiveSubscription()
 	const currentCustomer = await getCurrentCustomer()
 
-	const ProtectedComponentFn = await withFeatureAccess(
-		{
-			subscriptionId: currentSubscription?.id!,
-			priceId: currentSubscription?.priceId!,
-			featureKey: "serverStorage",
-		},
-		{
-			onGranted: async () => (
-				<div className="flex flex-col gap-3 border-y py-2 border-dotted bg-secondary/60 opacity-80">
-					<div className="text-xs flex items-center gap-2 justify-center text-muted-foreground">
-						<span className="text-center">
-							You have access to Server Storage feature!
-						</span>
-					</div>
-				</div>
-			),
-			onDenied: async (reason) => (
-				<div className="flex flex-col gap-3 border-y py-2 border-dotted bg-red-100 opacity-80">
-					<div className="text-xs flex items-center gap-2 justify-center text-red-600">
-						<span className="text-center">
-							{reason}
-						</span>
-					</div>
-				</div>
-			),
-		}
-	);
-	const ProtectedComponent = await ProtectedComponentFn();
+	// Check feature access using Polar meters
+	let featureAccessStatus: { allowed: boolean; reason?: string } = { allowed: false, reason: 'No subscription' };
+	
+	if (currentSubscription) {
+		// Check storage limit using the new metering system
+		featureAccessStatus = await checkCurrentLimit('storage_gb');
+	}
+
 	return (
 		<div className="flex items-center justify-center overflow-hidden no-visible-scrollbar px-6 md:px-0">
 			<main className="flex flex-col gap-4 row-start-2 items-center justify-center">
@@ -92,7 +71,25 @@ export default async function Home() {
 							</div>
 						</div>
 					)}
-					{ProtectedComponent}
+					{currentSubscription && (
+						featureAccessStatus.allowed ? (
+							<div className="flex flex-col gap-3 border-y py-2 border-dotted bg-secondary/60 opacity-80">
+								<div className="text-xs flex items-center gap-2 justify-center text-muted-foreground">
+									<span className="text-center">
+										You have access to Storage feature!
+									</span>
+								</div>
+							</div>
+						) : (
+							<div className="flex flex-col gap-3 border-y py-2 border-dotted bg-red-100 opacity-80">
+								<div className="text-xs flex items-center gap-2 justify-center text-red-600">
+									<span className="text-center">
+										{featureAccessStatus.reason || 'Storage limit reached'}
+									</span>
+								</div>
+							</div>
+						)
+					)}
 					<div className="flex flex-col gap-y-32 pt-4">
 						<h1 className="text-5xl">Products</h1>
 						<div className={`grid gap-6 md:gap-8 lg:gap-12 ${result.items.length === 1 ? 'grid-cols-1' :

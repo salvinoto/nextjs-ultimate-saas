@@ -3,17 +3,16 @@ import type { Product } from "@polar-sh/sdk/models/components/product.js";
 import { useMemo } from "react";
 import type { Prisma } from "@prisma/client";
 
-// For a Subscription with the correct relations as returned by getCurrentSubscription
-type SubscriptionWithRelations = Prisma.SubscriptionGetPayload<{
+// Subscription with product relation
+type SubscriptionWithProduct = Prisma.SubscriptionGetPayload<{
     include: {
         product: true;
-        FeatureUsage: true;
     }
 }>;
 
 interface ProductCardProps {
     product: Product
-    currentSubscription?: SubscriptionWithRelations | null
+    currentSubscription?: SubscriptionWithProduct | null
 }
 
 export const ProductCard = ({ product, currentSubscription }: ProductCardProps) => {

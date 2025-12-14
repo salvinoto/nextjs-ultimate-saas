@@ -10,82 +10,174 @@ import { linkSubscriptionToCustomer, upsertCustomer } from "@/lib/plans/db/custo
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { updateSubscriptionLimits } from "./plans/db/features";
 import { polar } from "@/polar";
 
-type OrganizationType = { id: string; name: string; slug: string; createdAt: Date; logo?: string | null; metadata?: unknown } | null;
+// ============================================
+// Types
+// ============================================
 
-type CustomerResult = {
-    organization: OrganizationType;
-    user: NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>['user'];
-    customer: NonNullable<Awaited<ReturnType<typeof prisma.customer.findFirst>>> | null;
-} & ({ id: string; name: string } | NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>['user']);
+/**
+ * Organization type from Better Auth
+ */
+export interface Organization {
+    id: string;
+    name: string;
+    slug: string;
+    createdAt: Date;
+    logo?: string | null;
+    metadata?: unknown;
+}
 
-// Type assertion helper for organization API
+/**
+ * User type from session
+ */
+export type SessionUser = NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>['user'];
+
+/**
+ * Customer data from database
+ */
+export type CustomerData = Awaited<ReturnType<typeof prisma.customer.findFirst>>;
+
+/**
+ * Result from getCurrentCustomer - clean, simple interface
+ */
+export interface CurrentCustomer {
+    /** The user from the session */
+    user: SessionUser;
+    /** The active organization (if any) */
+    organization: Organization | null;
+    /** The customer record from database (if exists) */
+    customer: CustomerData;
+    /** Convenience: ID of the billing entity (org or user) */
+    billingEntityId: string;
+    /** Convenience: Name of the billing entity */
+    billingEntityName: string;
+}
+
+// ============================================
+// Customer Functions
+// ============================================
+
+// Type assertion helper for organization API (Better Auth organization plugin)
 const getFullOrganization = (auth.api as unknown as {
-    getFullOrganization: (opts: { headers: Headers }) => Promise<OrganizationType>
+    getFullOrganization: (opts: { headers: Headers }) => Promise<Organization | null>
 }).getFullOrganization;
 
 /**
- * Get the current customer from the session
+ * Get the current customer from the session.
+ * Returns user, organization, and customer data in a clean interface.
+ * 
+ * @throws Error if no session found
+ * 
+ * @example
+ * ```ts
+ * const { user, organization, customer, billingEntityId } = await getCurrentCustomer();
+ * await trackApiRequest(billingEntityId, '/api/generate');
+ * ```
  */
-export async function getCurrentCustomer(): Promise<CustomerResult> {
+export async function getCurrentCustomer(): Promise<CurrentCustomer> {
+    const requestHeaders = await headers();
+    
     const session = await auth.api.getSession({
-        headers: await headers()
-    });
-    const organization = await getFullOrganization({
-        headers: await headers(),
+        headers: requestHeaders
     });
 
     if (!session) {
         throw new Error("No session found");
     }
 
-    const base = organization || session.user;
+    const organization = await getFullOrganization({
+        headers: requestHeaders,
+    });
 
     // Fetch the customer data based on user or organization
     const customer = await prisma.customer.findFirst({
         where: {
             OR: [
                 { userId: session.user.id },
-                { organizationId: organization?.id }
+                ...(organization?.id ? [{ organizationId: organization.id }] : [])
             ]
         }
     });
 
-    const result = Object.assign(base, {
-        organization: organization || null,
-        user: session.user,
-        customer: customer || null,
-    });
+    // Use organization if active, otherwise user
+    const billingEntityId = organization?.id ?? session.user.id;
+    const billingEntityName = organization?.name ?? session.user.name;
 
-    return result as CustomerResult;
+    return {
+        user: session.user,
+        organization: organization ?? null,
+        customer,
+        billingEntityId,
+        billingEntityName,
+    };
 }
 
 /**
- * Handle subscription events from webhook
+ * Get the active subscription for the current customer.
+ * 
+ * @returns The active subscription or null if none found
  */
-export async function handleSubscription(payload: WebhookSubscriptionActivePayload | WebhookSubscriptionCanceledPayload | WebhookSubscriptionCreatedPayload | WebhookSubscriptionRevokedPayload | WebhookSubscriptionUpdatedPayload) {
-    if (!payload || !payload.data) {
+export async function getActiveSubscription() {
+    const { billingEntityId, organization } = await getCurrentCustomer();
+    
+    const currentDate = new Date();
+
+    return prisma.subscription.findFirst({
+        where: {
+            OR: [
+                { userId: billingEntityId },
+                { organizationId: organization?.id }
+            ],
+            status: 'active',
+            currentPeriodStart: { lte: currentDate },
+            currentPeriodEnd: { gt: currentDate },
+            endedAt: null
+        },
+        include: {
+            product: true,
+        },
+        orderBy: {
+            createdAt: 'desc'
+        }
+    });
+}
+
+// ============================================
+// Webhook Handlers
+// ============================================
+
+type SubscriptionWebhookPayload = 
+    | WebhookSubscriptionActivePayload 
+    | WebhookSubscriptionCanceledPayload 
+    | WebhookSubscriptionCreatedPayload 
+    | WebhookSubscriptionRevokedPayload 
+    | WebhookSubscriptionUpdatedPayload;
+
+/**
+ * Handle subscription events from Polar webhook.
+ * Syncs subscription data to local database.
+ */
+export async function handleSubscription(payload: SubscriptionWebhookPayload) {
+    if (!payload?.data) {
         console.error('Invalid payload in handleSubscription:', payload);
         throw new Error("Invalid webhook payload");
     }
 
     const subData = payload.data;
-    console.log('Processing subscription data:', JSON.stringify(subData, null, 2));
+    console.log('Processing subscription:', subData.id, subData.status);
 
     try {
-        // First, ensure the product exists if we have product data
+        // Ensure the product exists if we have product data
         if (subData.productId && subData.product) {
             try {
                 await handleProduct(payload);
             } catch (error) {
                 console.error('Error handling product:', error);
-                // Continue with subscription handling even if product fails
             }
         }
 
-        // Then handle the subscription
+        // Upsert the subscription
         const subscription = await prisma.subscription.upsert({
             where: { id: subData.id },
             update: {
@@ -123,16 +215,19 @@ export async function handleSubscription(payload: WebhookSubscriptionActivePaylo
             }
         });
 
-        // Try to upsert customer and link subscription, but don't fail if these operations fail
+        // Link customer to subscription
         try {
-            await upsertCustomer(subData.customerId, subData.metadata.userId as string, subData.metadata.organizationId as string);
+            await upsertCustomer(
+                subData.customerId, 
+                subData.metadata.userId as string, 
+                subData.metadata.organizationId as string
+            );
             await linkSubscriptionToCustomer({
                 subscriptionId: subData.id,
                 polarCustomerId: subData.customerId,
             });
         } catch (error) {
             console.error('Error handling customer operations:', error);
-            // Continue since the main subscription operation succeeded
         }
 
         return subscription;
@@ -143,10 +238,10 @@ export async function handleSubscription(payload: WebhookSubscriptionActivePaylo
 }
 
 /**
- * Handle product creation or update from webhook
+ * Handle product creation or update from webhook.
  */
-export async function handleProduct(payload: WebhookSubscriptionActivePayload | WebhookSubscriptionCanceledPayload | WebhookSubscriptionCreatedPayload | WebhookSubscriptionRevokedPayload | WebhookSubscriptionUpdatedPayload) {
-    if (!payload || !payload.data) {
+export async function handleProduct(payload: SubscriptionWebhookPayload) {
+    if (!payload?.data) {
         console.error('Invalid payload in handleProduct:', payload);
         throw new Error("Invalid webhook payload");
     }
@@ -190,8 +285,12 @@ export async function handleProduct(payload: WebhookSubscriptionActivePayload | 
     }
 }
 
+// ============================================
+// Product Sync
+// ============================================
+
 /**
- * Sync products from Polar to local database
+ * Sync products from Polar to local database.
  */
 export async function syncPolar(products: Product[]) {
     for (const product of products) {
@@ -221,11 +320,10 @@ export async function syncPolar(products: Product[]) {
             }
         });
     }
-    await updateSubscriptionLimits();
 }
 
 /**
- * Admin function to sync all products from Polar
+ * Admin function to sync all products from Polar.
  */
 export async function adminSyncPolar() {
     const { result } = await polar.products.list({
