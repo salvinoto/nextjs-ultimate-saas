@@ -32,7 +32,7 @@ A modern, full-featured SaaS template built with Next.js 15, featuring authentic
 ### Prerequisites
 
 - Node.js 18+ 
-- PNPM package manager
+- npm package manager
 - PostgreSQL database
 
 ### Installation
@@ -45,7 +45,7 @@ cd nextjs-ultimate-saas
 
 2. Install dependencies:
 ```bash
-pnpm install
+npm install
 ```
 
 3. Set up your environment variables:
@@ -60,18 +60,18 @@ cp .env.example .env
 
 5. Initialize the database:
 ```bash
-pnpm prisma generate
-pnpm prisma db push
+npm run prisma generate
+npm run prisma db push
 ```
 
 6. Start the development server:
 ```bash
-pnpm dev
+npm run dev
 ```
 
 For HTTPS development:
 ```bash
-pnpm dev:secure
+npm run dev:secure
 ```
 
 ## 📁 Project Structure
