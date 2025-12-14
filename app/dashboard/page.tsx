@@ -7,6 +7,8 @@ import { getActiveSubscription } from '@/lib/plans/db/features'
 import { getCurrentCustomer } from "@/lib/payments";
 import { withFeatureAccess } from "@/lib/usage";
 
+export const dynamic = 'force-dynamic'
+
 export default async function Home() {
 	const features = [
 		"Email & Password",

@@ -4,7 +4,6 @@ import {
 	admin,
 	multiSession,
 	organization,
-	passkey,
 	twoFactor,
 	oneTap,
 	oAuthProxy,
@@ -16,13 +15,11 @@ import { resend } from "./email/resend";
 import { nextCookies } from "better-auth/next-js";
 import { addAccountToSession } from "./plugin";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/db";
 import { ac, owner as ownerRole, admin as adminRole, member as memberRole, myCustomRole } from "@/lib/permissions";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
-
-const prisma = new PrismaClient();
 
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
@@ -139,7 +136,6 @@ export const auth = betterAuth({
 				},
 			},
 		}),
-		passkey(),
 		openAPI(),
 		bearer(),
 		admin(),

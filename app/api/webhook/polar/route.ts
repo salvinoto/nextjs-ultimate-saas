@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
 			// A catch-all case to handle all subscription webhook events
 			case "subscription.updated":
 				await handleSubscription(webhookPayload);
-				await updateSubscriptionLimitById(webhookPayload.data.priceId as string);
+				await updateSubscriptionLimitById(webhookPayload.data.id as string);
 				break;
 
 			// Subscription has been activated
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
 			// Subscription has been revoked/peroid has ended with no renewal
 			case "subscription.revoked":
 				await handleSubscription(webhookPayload);
-				await updateSubscriptionLimitById(webhookPayload.data.priceId as string);
+				await updateSubscriptionLimitById(webhookPayload.data.id as string);
 				break;
 
 			// Subscription has been explicitly canceled by the user

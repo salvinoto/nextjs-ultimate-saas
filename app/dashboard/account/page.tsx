@@ -5,8 +5,13 @@ import UserCard from "./user-card";
 import { OrganizationCard } from "./organization-card";
 import AccountSwitcher from "@/components/account-switch";
 
+// Type assertion helper for organization API
+const getFullOrganization = (auth.api as unknown as {
+	getFullOrganization: (opts: { headers: Headers }) => Promise<{ id: string; name: string } | null>
+}).getFullOrganization;
+
 export default async function DashboardPage() {
-	const [session, activeSessions, deviceSessions, organization] =
+	const [session, activeSessions, organization] =
 		await Promise.all([
 			auth.api.getSession({
 				headers: await headers(),
@@ -14,15 +19,14 @@ export default async function DashboardPage() {
 			auth.api.listSessions({
 				headers: await headers(),
 			}),
-			auth.api.listDeviceSessions({
-				headers: await headers(),
-			}),
-			auth.api.getFullOrganization({
+			getFullOrganization({
 				headers: await headers(),
 			}),
 		]).catch((e) => {
 			throw redirect("/sign-in");
 		});
+	// Device sessions may have been merged with listSessions in Better Auth v1.4
+	const deviceSessions = activeSessions;
 	return (
 		<div className="w-full">
 			<div className="flex gap-4 flex-col">

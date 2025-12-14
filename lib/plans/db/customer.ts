@@ -1,6 +1,4 @@
-import { PrismaClient } from "@prisma/client"
-
-const prisma = new PrismaClient()
+import { prisma } from "@/lib/db"
 
 export async function upsertCustomer(polarCustomerId: string, userId?: string, organizationId?: string) {
     if (!userId && !organizationId) {

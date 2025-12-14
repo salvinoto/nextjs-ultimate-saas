@@ -1,8 +1,6 @@
 // app/api/cron/reset-usage/route.ts
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/db";
 
 export const dynamic = 'force-dynamic';
 

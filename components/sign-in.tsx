@@ -19,7 +19,7 @@ import {
 	GitHubLogoIcon,
 	TwitterLogoIcon,
 } from "@radix-ui/react-icons";
-import { Key, Loader2, TwitchIcon } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SetStateAction, useState } from "react";
@@ -266,22 +266,6 @@ export default function SignIn() {
 							</svg>
 						</Button>
 					</div>
-					<Button
-						variant="outline"
-						className="gap-2"
-						onClick={async () => {
-							await signIn.passkey({
-								fetchOptions: {
-									onResponse(context) {
-										router.push("/dashboard");
-									},
-								},
-							});
-						}}
-					>
-						<Key size={16} />
-						Sign-in with Passkey
-					</Button>
 				</div>
 			</CardContent>
 			<CardFooter>

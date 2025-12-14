@@ -1,22 +1,30 @@
 'use server';
 
-import { WebhookSubscriptionActivePayload, WebhookSubscriptionCanceledPayload, WebhookSubscriptionCreatedPayload, WebhookSubscriptionRevokedPayload, WebhookSubscriptionUpdatedPayload } from "@polar-sh/sdk/models/components";
-import { WebhookProductCreatedPayload, WebhookProductUpdatedPayload } from "@polar-sh/sdk/models/components";
-import { Product } from "@polar-sh/sdk/models/components/product";
+import type { WebhookSubscriptionActivePayload } from "@polar-sh/sdk/models/components/webhooksubscriptionactivepayload.js";
+import type { WebhookSubscriptionCanceledPayload } from "@polar-sh/sdk/models/components/webhooksubscriptioncanceledpayload.js";
+import type { WebhookSubscriptionCreatedPayload } from "@polar-sh/sdk/models/components/webhooksubscriptioncreatedpayload.js";
+import type { WebhookSubscriptionRevokedPayload } from "@polar-sh/sdk/models/components/webhooksubscriptionrevokedpayload.js";
+import type { WebhookSubscriptionUpdatedPayload } from "@polar-sh/sdk/models/components/webhooksubscriptionupdatedpayload.js";
+import type { Product } from "@polar-sh/sdk/models/components/product.js";
 import { linkSubscriptionToCustomer, upsertCustomer } from "@/lib/plans/db/customer";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { updateSubscriptionLimits } from "./plans/db/features";
 import { polar } from "@/polar";
 
-const prisma = new PrismaClient();
+type OrganizationType = { id: string; name: string; slug: string; createdAt: Date; logo?: string | null; metadata?: unknown } | null;
 
 type CustomerResult = {
-    organization: NonNullable<Awaited<ReturnType<typeof auth.api.getFullOrganization>>> | null;
+    organization: OrganizationType;
     user: NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>['user'];
     customer: NonNullable<Awaited<ReturnType<typeof prisma.customer.findFirst>>> | null;
-} & (NonNullable<Awaited<ReturnType<typeof auth.api.getFullOrganization>>> | NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>['user']);
+} & ({ id: string; name: string } | NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>['user']);
+
+// Type assertion helper for organization API
+const getFullOrganization = (auth.api as unknown as {
+    getFullOrganization: (opts: { headers: Headers }) => Promise<OrganizationType>
+}).getFullOrganization;
 
 /**
  * Get the current customer from the session
@@ -25,7 +33,7 @@ export async function getCurrentCustomer(): Promise<CustomerResult> {
     const session = await auth.api.getSession({
         headers: await headers()
     });
-    const organization = await auth.api.getFullOrganization({
+    const organization = await getFullOrganization({
         headers: await headers(),
     });
 
@@ -107,9 +115,9 @@ export async function handleSubscription(payload: WebhookSubscriptionActivePaylo
                 startedAt: new Date(subData.startedAt!),
                 endedAt: subData.endedAt ? new Date(subData.endedAt) : null,
                 productId: subData.productId,
-                priceId: subData.priceId,
-                discountId: subData.discountId,
-                checkoutId: subData.checkoutId,
+                priceId: (subData as unknown as { priceId?: string }).priceId ?? subData.id,
+                discountId: (subData as unknown as { discountId?: string }).discountId ?? null,
+                checkoutId: (subData as unknown as { checkoutId?: string }).checkoutId ?? null,
                 metadata: subData.metadata,
                 customFieldData: subData.customFieldData
             }

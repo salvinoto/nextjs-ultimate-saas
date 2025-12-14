@@ -1,10 +1,8 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from "@/lib/db";
 import { featureDefinitions, type FeatureLimit, plans } from '../rule-set';
 import { getCurrentCustomer } from '@/lib/payments';
 
 type FeatureKey = keyof typeof featureDefinitions;
-
-const prisma = new PrismaClient();
 
 interface BaseUsageParams {
     subscriptionId: string;

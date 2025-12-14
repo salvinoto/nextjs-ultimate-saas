@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Product } from "@polar-sh/sdk/models/components";
+import type { Product } from "@polar-sh/sdk/models/components/product.js";
 import { useMemo } from "react";
 import type { Prisma } from "@prisma/client";
 
