@@ -2,16 +2,18 @@
 
 import * as React from "react"
 import {
-  AudioWaveform,
+  BarChart3,
   BookOpen,
   Bot,
-  Command,
+  CreditCard,
   Frame,
-  GalleryVerticalEnd,
+  Home,
   Map,
   PieChart,
+  Play,
   Settings2,
   SquareTerminal,
+  User,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -26,14 +28,48 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 
-// This is sample data.
+// Navigation data with metering integration
 const data = {
   navMain: [
+    {
+      title: "Dashboard",
+      url: "/dashboard",
+      icon: Home,
+      isActive: true,
+      items: [
+        {
+          title: "Overview",
+          url: "/dashboard",
+        },
+        {
+          title: "Account",
+          url: "/dashboard/account",
+        },
+      ],
+    },
+    {
+      title: "Usage & Billing",
+      url: "/dashboard/usage",
+      icon: BarChart3,
+      items: [
+        {
+          title: "Usage Dashboard",
+          url: "/dashboard/usage",
+        },
+        {
+          title: "Demo Features",
+          url: "/dashboard/demo",
+        },
+        {
+          title: "Manage Billing",
+          url: "/billing",
+        },
+      ],
+    },
     {
       title: "Playground",
       url: "#",
       icon: SquareTerminal,
-      isActive: true,
       items: [
         {
           title: "History",
@@ -106,11 +142,11 @@ const data = {
         },
         {
           title: "Billing",
-          url: "#",
+          url: "/billing",
         },
         {
           title: "Limits",
-          url: "#",
+          url: "/dashboard/usage",
         },
       ],
     },
