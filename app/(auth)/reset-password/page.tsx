@@ -32,7 +32,7 @@ export default function ResetPassword() {
 		});
 		if (res.error) {
 			toast.error(res.error.message);
-			setError(res.error.message);
+			setError(res.error.message ?? "An error occurred");
 		} else {
 			toast.success("Password reset successfully");
 			router.push("/sign-in");
