@@ -9,24 +9,33 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import {
+	InputOTP,
+	InputOTPGroup,
+	InputOTPSeparator,
+	InputOTPSlot,
+} from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
 import { client } from "@/lib/auth-client";
-import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export default function Component() {
+export default function TotpVerification() {
 	const [totpCode, setTotpCode] = useState("");
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState(false);
+	const [isSubmitting, setIsSubmitting] = useState(false);
+	const router = useRouter();
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
-		if (totpCode.length !== 6 || !/^\d+$/.test(totpCode)) {
+		if (totpCode.length !== 6) {
 			setError("TOTP code must be 6 digits");
 			return;
 		}
+		setIsSubmitting(true);
 		client.twoFactor
 			.verifyTotp({
 				code: totpCode,
@@ -35,63 +44,83 @@ export default function Component() {
 				if (res.data?.token) {
 					setSuccess(true);
 					setError("");
+					setTimeout(() => {
+						router.push("/dashboard");
+					}, 1000);
 				} else {
 					setError("Invalid TOTP code");
+					setIsSubmitting(false);
 				}
+			})
+			.catch((err) => {
+				setError("An error occurred");
+				setIsSubmitting(false);
 			});
 	};
 
 	return (
-		<main className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
-			<Card className="w-[350px]">
-				<CardHeader>
-					<CardTitle>TOTP Verification</CardTitle>
-					<CardDescription>
-						Enter your 6-digit TOTP code to authenticate
-					</CardDescription>
-				</CardHeader>
-				<CardContent>
-					{!success ? (
-						<form onSubmit={handleSubmit}>
-							<div className="space-y-2">
-								<Label htmlFor="totp">TOTP Code</Label>
-								<Input
-									id="totp"
-									type="text"
-									inputMode="numeric"
-									pattern="\d{6}"
-									maxLength={6}
-									value={totpCode}
-									onChange={(e) => setTotpCode(e.target.value)}
-									placeholder="Enter 6-digit code"
-									required
-								/>
-							</div>
-							{error && (
-								<div className="flex items-center mt-2 text-red-500">
-									<AlertCircle className="w-4 h-4 mr-2" />
-									<span className="text-sm">{error}</span>
-								</div>
-							)}
-							<Button type="submit" className="w-full mt-4">
-								Verify
-							</Button>
-						</form>
-					) : (
-						<div className="flex flex-col items-center justify-center space-y-2">
-							<CheckCircle2 className="w-12 h-12 text-green-500" />
-							<p className="text-lg font-semibold">Verification Successful</p>
+		<Card className="w-full max-w-md">
+			<CardHeader>
+				<CardTitle>TOTP Verification</CardTitle>
+				<CardDescription>
+					Enter your 6-digit TOTP code to authenticate
+				</CardDescription>
+			</CardHeader>
+			<CardContent>
+				{!success ? (
+					<form onSubmit={handleSubmit}>
+						<div className="space-y-2 flex flex-col items-center justify-center">
+							<Label htmlFor="totp">TOTP Code</Label>
+							<InputOTP
+								maxLength={6}
+								value={totpCode}
+								onChange={(value) => setTotpCode(value)}
+							>
+								<InputOTPGroup>
+									<InputOTPSlot index={0} />
+									<InputOTPSlot index={1} />
+									<InputOTPSlot index={2} />
+								</InputOTPGroup>
+								<InputOTPSeparator />
+								<InputOTPGroup>
+									<InputOTPSlot index={3} />
+									<InputOTPSlot index={4} />
+									<InputOTPSlot index={5} />
+								</InputOTPGroup>
+							</InputOTP>
 						</div>
-					)}
-				</CardContent>
-				<CardFooter className="text-sm text-muted-foreground gap-2">
-					<Link href="/two-factor/otp">
-						<Button variant="link" size="sm">
-							Switch to Email Verification
+						{error && (
+							<div className="flex items-center justify-center mt-2 text-red-500">
+								<AlertCircle className="w-4 h-4 mr-2" />
+								<span className="text-sm">{error}</span>
+							</div>
+						)}
+						<Button
+							type="submit"
+							className="w-full mt-4"
+							disabled={isSubmitting}
+						>
+							{isSubmitting ? (
+								<Loader2 className="animate-spin w-4 h-4" />
+							) : (
+								"Verify"
+							)}
 						</Button>
-					</Link>
-				</CardFooter>
-			</Card>
-		</main>
+					</form>
+				) : (
+					<div className="flex flex-col items-center justify-center space-y-2">
+						<CheckCircle2 className="w-12 h-12 text-green-500" />
+						<p className="text-lg font-semibold">Verification Successful</p>
+					</div>
+				)}
+			</CardContent>
+			<CardFooter className="text-sm text-muted-foreground gap-2 justify-center">
+				<Link href="/two-factor/otp">
+					<Button variant="link" size="sm">
+						Switch to Email Verification
+					</Button>
+				</Link>
+			</CardFooter>
+		</Card>
 	);
 }
