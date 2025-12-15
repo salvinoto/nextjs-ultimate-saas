@@ -1,17 +1,15 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// Prisma v7 requires datasource URLs to be configured in prisma.config.ts
+// and driver adapters to be passed to the PrismaClient constructor
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
 }
 
 model User {
@@ -34,7 +32,6 @@ model User {
   twofactors       TwoFactor[]
   passkeys         Passkey[]
   Subscription     Subscription[]
-  FeatureUsage     FeatureUsage[]
   customers        Customer[]
 
   @@unique([email])
@@ -99,7 +96,6 @@ model Organization {
   members      Member[]
   invitations  Invitation[]
   Subscription Subscription[]
-  FeatureUsage FeatureUsage[]
   customers    Customer[]
 
   @@unique([slug])
@@ -159,13 +155,13 @@ model Passkey {
 }
 
 model Subscription {
-  id                 String         @id
+  id                 String        @id
   createdAt          DateTime
   modifiedAt         DateTime
   userId             String?
-  user               User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organizationId     String?
-  organization       Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization       Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   amount             Int
   currency           String
   recurringInterval  String
@@ -176,56 +172,16 @@ model Subscription {
   startedAt          DateTime
   endedAt            DateTime?
   productId          String?
-  product            Product?       @relation(fields: [productId], references: [id])
+  product            Product?      @relation(fields: [productId], references: [id])
   priceId            String?
   discountId         String?
   checkoutId         String?
   metadata           Json?
   customFieldData    Json?
   customerId         String?
-  customer           Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  FeatureUsage       FeatureUsage[]
-  FeatureLimit       FeatureLimit[]
+  customer           Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
   @@map("subscription")
-}
-
-model FeatureUsage {
-  id             String        @id @default(cuid())
-  featureName    String // Name of the feature being tracked
-  subscriptionId String // Link to the subscription
-  subscription   Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-  organizationId String? // Optional link to organization
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId         String? // Optional link to user
-  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  currentUsage   Float? // Current usage value (float to support both count and storage)
-  unit           String? // MB, GB, items, etc.
-  lastUpdated    DateTime      @updatedAt
-  periodStart    DateTime // Start of the current billing period
-  periodEnd      DateTime // End of the current billing period
-  resetFrequency String? // daily, weekly, monthly, yearly - for features that reset
-
-  @@unique([subscriptionId, featureName, periodStart, periodEnd])
-  @@index([organizationId])
-  @@index([userId])
-  @@map("feature_usage")
-}
-
-model FeatureLimit {
-  id             String       @id @default(cuid())
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  featureKey     String
-  type           String
-  value          Float?
-  unit           String?
-  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-  subscriptionId String
-
-  @@unique([subscriptionId, featureKey], name: "subscriptionId_featureKey")
-  @@index([subscriptionId])
-  @@map("feature_limit")
 }
 
 model Product {

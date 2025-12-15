@@ -14,15 +14,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { signIn } from "@/lib/auth-client";
-import {
-	DiscordLogoIcon,
-	GitHubLogoIcon,
-	TwitterLogoIcon,
-} from "@radix-ui/react-icons";
-import { Key, Loader2, TwitchIcon } from "lucide-react";
+import { DiscordLogoIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
+import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { SetStateAction, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 export default function SignIn() {
@@ -31,8 +27,9 @@ export default function SignIn() {
 	const [rememberMe, setRememberMe] = useState(false);
 	const router = useRouter();
 	const [loading, setLoading] = useState(false);
+
 	return (
-		<Card className="z-50 rounded-md rounded-t-none max-w-md">
+		<Card className="z-50 rounded-md rounded-t-none w-full max-w-md">
 			<CardHeader>
 				<CardTitle className="text-lg md:text-xl">Sign In</CardTitle>
 				<CardDescription className="text-xs md:text-sm">
@@ -67,18 +64,19 @@ export default function SignIn() {
 						<PasswordInput
 							id="password"
 							value={password}
-							onChange={(e: { target: { value: SetStateAction<string>; }; }) => setPassword(e.target.value)}
+							onChange={(e) => setPassword(e.target.value)}
 							autoComplete="password"
 							placeholder="Password"
 						/>
 					</div>
 					<div className="flex items-center gap-2">
 						<Checkbox
+							id="remember-me"
 							onClick={() => {
 								setRememberMe(!rememberMe);
 							}}
 						/>
-						<Label>Remember me</Label>
+						<Label htmlFor="remember-me">Remember me</Label>
 					</div>
 
 					<Button
@@ -109,6 +107,18 @@ export default function SignIn() {
 					>
 						{loading ? <Loader2 size={16} className="animate-spin" /> : "Login"}
 					</Button>
+
+					<div className="relative">
+						<div className="absolute inset-0 flex items-center">
+							<span className="w-full border-t" />
+						</div>
+						<div className="relative flex justify-center text-xs uppercase">
+							<span className="bg-background px-2 text-muted-foreground">
+								Or continue with
+							</span>
+						</div>
+					</div>
+
 					<div className="grid grid-cols-4 gap-2">
 						<Button
 							variant="outline"
@@ -266,28 +276,15 @@ export default function SignIn() {
 							</svg>
 						</Button>
 					</div>
-					<Button
-						variant="outline"
-						className="gap-2"
-						onClick={async () => {
-							await signIn.passkey({
-								fetchOptions: {
-									onResponse(context) {
-										router.push("/dashboard");
-									},
-								},
-							});
-						}}
-					>
-						<Key size={16} />
-						Sign-in with Passkey
-					</Button>
 				</div>
 			</CardContent>
 			<CardFooter>
 				<div className="flex justify-center w-full border-t py-4">
 					<p className="text-center text-xs text-neutral-500">
-						Secured by <span className="text-orange-400">better-auth.</span>
+						Don&apos;t have an account?{" "}
+						<Link href="/sign-up" className="underline text-orange-400">
+							Sign up
+						</Link>
 					</p>
 				</div>
 			</CardFooter>

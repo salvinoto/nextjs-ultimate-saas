@@ -12,13 +12,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
-import { DiscordLogoIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
-import { SetStateAction, useState } from "react";
 import { client, signIn, signUp } from "@/lib/auth-client";
-import Image from "next/image";
+import { DiscordLogoIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
 import { Loader2, X } from "lucide-react";
-import { toast } from "sonner";
+import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { SetStateAction, useState } from "react";
+import { toast } from "sonner";
 
 export function SignUp() {
 	const [firstName, setFirstName] = useState("");
@@ -29,6 +30,7 @@ export function SignUp() {
 	const [image, setImage] = useState<File | null>(null);
 	const [imagePreview, setImagePreview] = useState<string | null>(null);
 	const router = useRouter();
+	const [loading, setLoading] = useState(false);
 
 	const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
@@ -41,10 +43,9 @@ export function SignUp() {
 			reader.readAsDataURL(file);
 		}
 	};
-	const [loading, setLoading] = useState(false);
 
 	return (
-		<Card className="z-50 rounded-md rounded-t-none max-w-md">
+		<Card className="z-50 rounded-md rounded-t-none w-full max-w-md">
 			<CardHeader>
 				<CardTitle className="text-lg md:text-xl">Sign Up</CardTitle>
 				<CardDescription className="text-xs md:text-sm">
@@ -97,17 +98,21 @@ export function SignUp() {
 						<PasswordInput
 							id="password"
 							value={password}
-							onChange={(e: { target: { value: SetStateAction<string>; }; }) => setPassword(e.target.value)}
+							onChange={(e: { target: { value: SetStateAction<string> } }) =>
+								setPassword(e.target.value)
+							}
 							autoComplete="new-password"
 							placeholder="Password"
 						/>
 					</div>
 					<div className="grid gap-2">
-						<Label htmlFor="password">Confirm Password</Label>
+						<Label htmlFor="password_confirmation">Confirm Password</Label>
 						<PasswordInput
 							id="password_confirmation"
 							value={passwordConfirmation}
-							onChange={(e: { target: { value: SetStateAction<string>; }; }) => setPasswordConfirmation(e.target.value)}
+							onChange={(e: { target: { value: SetStateAction<string> } }) =>
+								setPasswordConfirmation(e.target.value)
+							}
 							autoComplete="new-password"
 							placeholder="Confirm Password"
 						/>
@@ -179,10 +184,22 @@ export function SignUp() {
 							"Create an account"
 						)}
 					</Button>
-					<div className="flex items-center gap-2">
+
+					<div className="relative">
+						<div className="absolute inset-0 flex items-center">
+							<span className="w-full border-t" />
+						</div>
+						<div className="relative flex justify-center text-xs uppercase">
+							<span className="bg-background px-2 text-muted-foreground">
+								Or continue with
+							</span>
+						</div>
+					</div>
+
+					<div className="grid grid-cols-4 gap-2">
 						<Button
 							variant="outline"
-							className="w-full gap-2"
+							className="gap-2"
 							onClick={async () => {
 								await signIn.social({
 									provider: "github",
@@ -194,11 +211,10 @@ export function SignUp() {
 						</Button>
 						<Button
 							variant="outline"
-							className="w-full gap-2"
+							className="gap-2"
 							onClick={async () => {
 								await signIn.social({
 									provider: "discord",
-									callbackURL: "/dashboard",
 								});
 							}}
 						>
@@ -206,7 +222,7 @@ export function SignUp() {
 						</Button>
 						<Button
 							variant="outline"
-							className="w-full gap-2"
+							className="gap-2"
 							onClick={async () => {
 								await signIn.social({
 									provider: "google",
@@ -240,7 +256,7 @@ export function SignUp() {
 						</Button>
 						<Button
 							variant="outline"
-							className="w-full gap-2"
+							className="gap-2"
 							onClick={async () => {
 								await signIn.social({
 									provider: "microsoft",
@@ -260,13 +276,92 @@ export function SignUp() {
 								></path>
 							</svg>
 						</Button>
+						<Button
+							variant="outline"
+							className="gap-2"
+							onClick={async () => {
+								await signIn.social({
+									provider: "twitch",
+									callbackURL: "/dashboard",
+								});
+							}}
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="1.2em"
+								height="1.2em"
+								viewBox="0 0 24 24"
+							>
+								<path
+									fill="currentColor"
+									d="M11.64 5.93h1.43v4.28h-1.43m3.93-4.28H17v4.28h-1.43M7 2L3.43 5.57v12.86h4.28V22l3.58-3.57h2.85L20.57 12V2m-1.43 9.29l-2.85 2.85h-2.86l-2.5 2.5v-2.5H7.71V3.43h11.43Z"
+								></path>
+							</svg>
+						</Button>
+
+						<Button
+							variant="outline"
+							className="gap-2"
+							onClick={async () => {
+								await signIn.social({
+									provider: "facebook",
+									callbackURL: "/dashboard",
+								});
+							}}
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="1.3em"
+								height="1.3em"
+								viewBox="0 0 24 24"
+							>
+								<path
+									fill="currentColor"
+									d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.57 6 13.5 6H16v3h-2c-.55 0-1 .45-1 1v2h3v3h-3v6.95c5.05-.5 9-4.76 9-9.95"
+								></path>
+							</svg>
+						</Button>
+						<Button
+							variant="outline"
+							className="gap-2"
+							onClick={async () => {
+								await signIn.social({
+									provider: "twitter",
+									callbackURL: "/dashboard",
+								});
+							}}
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="1em"
+								height="1em"
+								viewBox="0 0 14 14"
+							>
+								<g fill="none">
+									<g clipPath="url(#primeTwitter0)">
+										<path
+											fill="currentColor"
+											d="M11.025.656h2.147L8.482 6.03L14 13.344H9.68L6.294 8.909l-3.87 4.435H.275l5.016-5.75L0 .657h4.43L7.486 4.71zm-.755 11.4h1.19L3.78 1.877H2.504z"
+										></path>
+									</g>
+									<defs>
+										<clipPath id="primeTwitter0">
+											<path fill="#fff" d="M0 0h14v14H0z"></path>
+										</clipPath>
+									</defs>
+								</g>
+							</svg>
+						</Button>
 					</div>
 				</div>
 			</CardContent>
 			<CardFooter>
 				<div className="flex justify-center w-full border-t py-4">
 					<p className="text-center text-xs text-neutral-500">
-						Secured by <span className="text-orange-400">better-auth.</span>
+						Already have an account?{" "}
+						<Link href="/sign-in" className="underline text-orange-400">
+							Sign in
+						</Link>
 					</p>
 				</div>
 			</CardFooter>

@@ -17,7 +17,9 @@ export async function GET(req: NextRequest) {
         return NextResponse.redirect(new URL('/login', req.nextUrl))
     }
 
-    const organization = await auth.api.getFullOrganization({
+    const organization = await (auth.api as unknown as {
+        getFullOrganization: (opts: { headers: Headers }) => Promise<{ id: string; name: string } | null>
+    }).getFullOrganization({
         headers: await headers()
     })
 
@@ -27,24 +29,24 @@ export async function GET(req: NextRequest) {
             [key: string]: string | number | boolean;
         }
 
-        const checkoutData = {
-            productPriceId,
-            successUrl: confirmationUrl,
-            customerEmail: session.user.email,
-            metadata: {
-                userName: session.user.name,
-                userId: session.user.id,
-                isOrganization: !!organization?.id
-            } as CheckoutMetadata
+        const metadata: CheckoutMetadata = {
+            userName: session.user.name,
+            userId: session.user.id,
+            isOrganization: !!organization?.id
         }
 
         // Only add organization fields if they exist
         if (organization?.id) {
-            checkoutData.metadata.organizationId = organization.id
-            checkoutData.metadata.organizationName = organization.name
+            metadata.organizationId = organization.id
+            metadata.organizationName = organization.name
         }
 
-        const result = await polar.checkouts.custom.create(checkoutData)
+        const result = await polar.checkouts.create({
+            products: [productPriceId],
+            successUrl: confirmationUrl,
+            customerEmail: session.user.email,
+            metadata,
+        })
 
         return NextResponse.redirect(result.url)
     } catch (error) {

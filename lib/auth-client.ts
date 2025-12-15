@@ -1,7 +1,6 @@
 import { createAuthClient } from "better-auth/react";
 import {
 	organizationClient,
-	passkeyClient,
 	twoFactorClient,
 	adminClient,
 	multiSessionClient,
@@ -26,7 +25,6 @@ export const client = createAuthClient({
 				window.location.href = "/two-factor";
 			},
 		}),
-		passkeyClient(),
 		adminClient(),
 		multiSessionClient(),
 		// oneTapClient({

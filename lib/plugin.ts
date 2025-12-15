@@ -1,15 +1,16 @@
 import { BetterAuthPlugin } from "better-auth";
+import { createAuthMiddleware } from "@better-auth/core/api";
 
 export const addAccountToSession = {
 	id: "add-account-to-session",
 	hooks: {
 		after: [
 			{
-				matcher(context) {
+				matcher(context: { path: string }) {
 					return context.path.startsWith("/callback");
 				},
-				async handler(ctx) {
-					const sessionCookie = ctx.responseHeader.get(
+				handler: createAuthMiddleware(async (ctx) => {
+					const sessionCookie = ctx.context.responseHeaders?.get(
 						ctx.context.authCookies.sessionToken.name,
 					);
 					if (!sessionCookie) {
@@ -23,7 +24,7 @@ export const addAccountToSession = {
 					await ctx.context.internalAdapter.updateSession(sessionId, {
 						accountId: provider,
 					});
-				},
+				}),
 			},
 		],
 	},

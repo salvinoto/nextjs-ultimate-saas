@@ -1,7 +1,9 @@
-import type { Product } from "@polar-sh/sdk/models/components";
+import type { Product } from "@polar-sh/sdk/models/components/product.js";
 import Link from "next/link";
 import { useMemo } from "react";
 import { polar } from "../../polar";
+
+export const dynamic = 'force-dynamic'
 
 interface ProductCardProps {
 	product: Product;
