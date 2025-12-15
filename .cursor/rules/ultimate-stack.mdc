@@ -1,0 +1,340 @@
+---
+description: Next.js Ultimate SaaS template with Better Auth, Polar payments, and usage-based metering
+alwaysApply: true
+---
+
+# Next.js Ultimate SaaS Template
+
+This project is a full-featured SaaS starter with authentication, payments, organizations, and usage-based billing.
+
+## Tech Stack
+
+- **Framework**: Next.js 15 (App Router)
+- **Database**: PostgreSQL with Prisma ORM
+- **Auth**: Better Auth with organization support
+- **Payments**: Polar for subscriptions and usage-based billing
+- **Styling**: Tailwind CSS + shadcn/ui components
+- **Email**: Resend
+
+## Project Structure
+
+```
+lib/
+├── auth.ts              # Better Auth configuration
+├── auth-client.ts       # Client-side auth hooks
+├── payments.ts          # Polar payments integration
+├── metering/
+│   ├── index.ts         # Unified metering exports
+│   ├── client.ts        # Usage tracking functions
+│   ├── limits.ts        # Limit checking functions
+│   ├── types.ts         # TypeScript types
+│   └── setup-meters.ts  # Meter setup script
+├── permissions.ts       # RBAC roles and permissions
+└── plans/
+    └── db/
+        └── customer.ts  # Customer database operations
+```
+
+---
+
+## Authentication (Better Auth)
+
+### Getting the Current Customer
+
+Always use `getCurrentCustomer()` in server actions and API routes:
+
+```typescript
+import { getCurrentCustomer } from '@/lib/payments';
+
+const { user, organization, billingEntityId } = await getCurrentCustomer();
+```
+
+- `user` - The authenticated user from session
+- `organization` - The active organization (if any)
+- `billingEntityId` - Use this for metering (automatically picks org or user ID)
+
+### Getting Active Subscription
+
+```typescript
+import { getActiveSubscription } from '@/lib/payments';
+
+const subscription = await getActiveSubscription();
+```
+
+---
+
+## RBAC Permissions
+
+Roles are defined in `lib/permissions.ts`:
+
+| Role | Permissions |
+|------|-------------|
+| `owner` | Full control: org update/delete, member CRUD, invitations, project CRUD |
+| `admin` | Org update, member CRUD, invitations, project create/update |
+| `member` | Project create only |
+
+---
+
+## Usage-Based Billing (Metering)
+
+### Available Meters
+
+| Slug | Event Name | Aggregation | Use Case |
+|------|------------|-------------|----------|
+| `api_requests` | `api.request` | count | API calls per billing period |
+| `storage_gb` | `storage.update` | max(size_gb) | Peak storage used |
+| `ai_tokens` | `ai.tokens` | sum(tokens) | Total AI tokens consumed |
+| `team_seats` | `seat.active` | unique(user_id) | Active team members |
+
+### Tracking Usage
+
+Always import from `@/lib/metering`:
+
+```typescript
+import { 
+  trackApiRequest,
+  trackAiTokens,
+  trackStorageUpdate,
+  trackSeatActivity,
+  trackUsage,
+  trackUsageBatch,
+} from '@/lib/metering';
+```
+
+#### Track API Requests
+
+```typescript
+const { billingEntityId } = await getCurrentCustomer();
+await trackApiRequest(billingEntityId, '/api/endpoint');
+
+// With options
+await trackApiRequest(billingEntityId, '/api/endpoint', {
+  method: 'POST',
+  statusCode: 200,
+  duration: 150
+});
+```
+
+#### Track AI Tokens
+
+```typescript
+await trackAiTokens(billingEntityId, 1500);
+await trackAiTokens(billingEntityId, 1500, { model: 'gpt-4', type: 'output' });
+```
+
+#### Track Storage
+
+```typescript
+await trackStorageUpdate(billingEntityId, 2.5); // 2.5 GB
+await trackStorageUpdate(billingEntityId, 3.0, 'upload');
+```
+
+#### Track Seat Activity
+
+```typescript
+await trackSeatActivity(orgId, userId);
+await trackSeatActivity(orgId, userId, 'login');
+```
+
+#### Batch Tracking
+
+```typescript
+await trackUsageBatch([
+  { externalCustomerId: id, eventName: 'api.request', properties: { endpoint: '/a' } },
+  { externalCustomerId: id, eventName: 'api.request', properties: { endpoint: '/b' } },
+]);
+```
+
+### Checking Limits
+
+```typescript
+import { 
+  checkCurrentLimit,
+  checkLimit,
+  getAllUsage,
+} from '@/lib/metering';
+
+// Current customer's limit
+const status = await checkCurrentLimit('api_requests');
+// { allowed: boolean, current: number, limit: number | null, remaining: number | null }
+
+// Specific customer
+const status = await checkLimit('user_123', 'storage_gb');
+
+// All meters
+const allUsage = await getAllUsage();
+```
+
+### Protecting Actions with Limits
+
+#### Using withUsageLimit (throws on limit exceeded)
+
+```typescript
+import { withUsageLimit, trackAiTokens } from '@/lib/metering';
+
+export async function generateContent(prompt: string) {
+  const { billingEntityId } = await getCurrentCustomer();
+  
+  return withUsageLimit('ai_tokens', async () => {
+    const result = await callAI(prompt);
+    await trackAiTokens(billingEntityId, result.tokensUsed);
+    return result;
+  });
+}
+```
+
+#### Using withUsageLimitSafe (returns result object)
+
+```typescript
+import { withUsageLimitSafe } from '@/lib/metering';
+
+const result = await withUsageLimitSafe('storage_gb', async () => {
+  return await uploadFile(file);
+});
+
+if (result.success) {
+  console.log(result.data);
+} else {
+  console.error(result.error); // "Usage limit exceeded..."
+}
+```
+
+### In API Routes
+
+```typescript
+export async function POST(req: Request) {
+  const { billingEntityId } = await getCurrentCustomer();
+  
+  // Check limit first
+  const status = await checkCurrentLimit('api_requests');
+  if (!status.allowed) {
+    return Response.json({ error: status.reason }, { status: 429 });
+  }
+  
+  // Process request...
+  
+  // Track usage AFTER success
+  await trackApiRequest(billingEntityId, '/api/process');
+  
+  return Response.json({ success: true });
+}
+```
+
+### In Server Actions
+
+```typescript
+'use server';
+
+import { withUsageLimit, trackAiTokens } from '@/lib/metering';
+import { getCurrentCustomer } from '@/lib/payments';
+
+export async function summarizeText(text: string) {
+  const { billingEntityId } = await getCurrentCustomer();
+  
+  return withUsageLimit('ai_tokens', async () => {
+    const result = await aiSummarize(text);
+    await trackAiTokens(billingEntityId, result.tokens);
+    return result.summary;
+  });
+}
+```
+
+---
+
+## Best Practices
+
+### 1. Always Track After Success
+Track usage only after the operation succeeds:
+
+```typescript
+// ✅ Good
+const result = await performOperation();
+await trackUsage(customerId, 'operation', { ...result });
+
+// ❌ Bad - tracks even if operation fails
+await trackUsage(customerId, 'operation', {});
+const result = await performOperation(); // might fail
+```
+
+### 2. Check Limits Early
+Check limits at the start of expensive operations:
+
+```typescript
+export async function expensiveAIOperation(input: string) {
+  const status = await checkCurrentLimit('ai_tokens');
+  if (!status.allowed) {
+    throw new Error(status.reason);
+  }
+  
+  const result = await runExpensiveAI(input);
+  await trackAiTokens(customerId, result.tokens);
+  return result;
+}
+```
+
+### 3. Use Batch Tracking for Efficiency
+
+```typescript
+// ✅ Single API call
+await trackUsageBatch([
+  { externalCustomerId: id, eventName: 'api.request', properties: { endpoint: '/a' } },
+  { externalCustomerId: id, eventName: 'api.request', properties: { endpoint: '/b' } },
+]);
+
+// ❌ Less efficient - multiple API calls
+await trackApiRequest(id, '/a');
+await trackApiRequest(id, '/b');
+```
+
+### 4. Use billingEntityId for Organization Support
+
+```typescript
+const { billingEntityId } = await getCurrentCustomer();
+// billingEntityId automatically uses org ID when in org context
+await trackApiRequest(billingEntityId, endpoint);
+```
+
+---
+
+## Type Imports
+
+All metering types are available from `@/lib/metering`:
+
+```typescript
+import type {
+  // Application types
+  MeterSlug,
+  UsageStatus,
+  TrackingResult,
+  // Polar SDK types (re-exported)
+  Meter,
+  CustomerMeter,
+  Customer,
+} from '@/lib/metering';
+```
+
+---
+
+## Environment Variables
+
+Required for metering and payments:
+
+```env
+POLAR_ACCESS_TOKEN=your_polar_access_token
+POLAR_ORGANIZATION_ID=your_polar_org_id
+POLAR_WEBHOOK_SECRET=your_webhook_secret
+```
+
+---
+
+## Setup Commands
+
+```bash
+# Database migrations
+npx prisma migrate dev
+
+# Create Polar meters
+npx tsx lib/metering/setup-meters.ts
+
+# Then add metered prices to products in Polar dashboard
+```
