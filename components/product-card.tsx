@@ -59,7 +59,7 @@ export const ProductCard = ({ product, currentSubscription }: ProductCardProps) 
                             ? 'bg-neutral-700 text-white hover:bg-neutral-600'
                             : 'bg-white text-black hover:bg-neutral-100'
                             }`}
-                        href={isCurrentPlan ? `/billing` : `/checkout?priceId=${firstPrice.id}`}
+                        href={isCurrentPlan ? `/billing` : `/checkout?productId=${product.id}`}
                     >
                         {isCurrentPlan ? 'Manage' : 'Buy'}
                     </Link>
