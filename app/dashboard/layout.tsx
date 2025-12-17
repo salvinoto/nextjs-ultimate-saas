@@ -20,7 +20,7 @@ export default function DashboardLayout({
     children: React.ReactNode
 }) {
     return (
-        <SidebarProvider>
+        <SidebarProvider defaultOpen={true}>
             <AppSidebar />
             <SidebarInset>
                 <header className="bg-background sticky top-0 flex h-16 shrink-0 items-center gap-2 border-b px-4">
