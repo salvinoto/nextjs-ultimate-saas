@@ -6,7 +6,7 @@ import type { WebhookSubscriptionCreatedPayload } from "@polar-sh/sdk/models/com
 import type { WebhookSubscriptionRevokedPayload } from "@polar-sh/sdk/models/components/webhooksubscriptionrevokedpayload.js";
 import type { WebhookSubscriptionUpdatedPayload } from "@polar-sh/sdk/models/components/webhooksubscriptionupdatedpayload.js";
 import type { Product } from "@polar-sh/sdk/models/components/product.js";
-import { linkSubscriptionToCustomer, upsertCustomer, resolveExternalIdToBillingEntity } from "@/lib/plans/db/customer";
+import { linkSubscriptionToCustomer, upsertCustomer, resolveExternalIdToBillingEntity, findLocalCustomerByPolarId } from "@/lib/plans/db/customer";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
@@ -160,6 +160,9 @@ type SubscriptionWebhookPayload =
  * 
  * IMPORTANT: The user/org ID is extracted from customer.externalId, NOT from metadata.
  * The externalId is set during checkout creation via the externalCustomerId parameter.
+ * 
+ * FALLBACK: If externalId is missing (legacy customers), we try to find the customer
+ * mapping from our local database using the Polar customer ID.
  */
 export async function handleSubscription(payload: SubscriptionWebhookPayload) {
     if (!payload?.data) {
@@ -170,30 +173,88 @@ export async function handleSubscription(payload: SubscriptionWebhookPayload) {
     const subData = payload.data;
     console.log('Processing subscription:', subData.id, subData.status);
 
-    // Extract the external customer ID from the Polar customer object
-    // This is the billingEntityId we set during checkout (user ID or org ID)
-    const customer = subData.customer as { externalId?: string } | undefined;
-    const externalId = customer?.externalId;
+    // The customer object in subscription webhooks is minimal (id, email only)
+    // We need to check if externalId is present, otherwise fetch the full customer
+    const webhookCustomer = subData.customer as { 
+        externalId?: string; 
+        external_id?: string;  // Check snake_case too
+    } | undefined;
+    
+    // Try both camelCase and snake_case
+    let externalId = webhookCustomer?.externalId ?? webhookCustomer?.external_id;
+    
+    console.log('Webhook customer data:', JSON.stringify(webhookCustomer, null, 2));
 
-    if (!externalId) {
-        console.error('No externalId found on customer. Subscription cannot be linked.', {
-            subscriptionId: subData.id,
-            customerId: subData.customerId,
-        });
-        throw new Error("Customer externalId is required to link subscription");
+    let userId: string | null = null;
+    let organizationId: string | null = null;
+
+    // If externalId not in webhook payload, fetch full customer from Polar API
+    if (!externalId && subData.customerId) {
+        console.log('externalId not in webhook payload, fetching full customer from Polar API...');
+        try {
+            const fullCustomer = await polar.customers.get({ id: subData.customerId });
+            externalId = fullCustomer.externalId ?? undefined;
+            console.log('Fetched customer from Polar:', {
+                id: fullCustomer.id,
+                email: fullCustomer.email,
+                externalId: fullCustomer.externalId ?? '(not set)'
+            });
+        } catch (fetchError) {
+            console.warn('Failed to fetch customer from Polar API:', fetchError);
+        }
     }
 
-    console.log('Resolving externalId:', externalId);
+    if (externalId) {
+        console.log('Resolving externalId:', externalId);
 
-    // Resolve the externalId to determine if it's a user or organization
-    const billingEntity = await resolveExternalIdToBillingEntity(externalId);
+        // Resolve the externalId to determine if it's a user or organization
+        const billingEntity = await resolveExternalIdToBillingEntity(externalId);
 
-    if (!billingEntity.found) {
-        console.error('Could not resolve externalId to user or organization:', externalId);
-        throw new Error(`Could not find user or organization for externalId: ${externalId}`);
+        if (!billingEntity.found) {
+            console.error('Could not resolve externalId to user or organization:', externalId);
+            throw new Error(`Could not find user or organization for externalId: ${externalId}`);
+        }
+
+        userId = billingEntity.userId;
+        organizationId = billingEntity.organizationId;
+        console.log('Resolved billing entity from externalId:', { userId, organizationId });
+    } else {
+        // FALLBACK: No externalId found anywhere - try to find from local database
+        // This handles legacy customers that were created before externalCustomerId was implemented
+        console.log('No externalId found, checking local database for customer mapping...');
+        
+        const localCustomer = await findLocalCustomerByPolarId(subData.customerId);
+        
+        if (localCustomer) {
+            userId = localCustomer.userId;
+            organizationId = localCustomer.organizationId;
+            console.log('Found customer mapping in local database:', { userId, organizationId });
+            
+            // Update Polar customer with externalId for future lookups
+            const billingEntityId = organizationId ?? userId;
+            if (billingEntityId) {
+                try {
+                    await polar.customers.update({
+                        id: subData.customerId,
+                        customerUpdate: {
+                            externalId: billingEntityId
+                        }
+                    });
+                    console.log('Updated Polar customer with externalId:', billingEntityId);
+                } catch (updateError) {
+                    // Non-critical - log and continue
+                    console.warn('Failed to update Polar customer externalId:', updateError);
+                }
+            }
+        } else {
+            console.error('No externalId found and no local customer mapping exists.', {
+                subscriptionId: subData.id,
+                customerId: subData.customerId,
+            });
+            throw new Error("Customer externalId is required to link subscription. Please update the customer in Polar with the correct external_id.");
+        }
     }
 
-    const { userId, organizationId } = billingEntity;
     console.log('Resolved billing entity:', { userId, organizationId });
 
     try {

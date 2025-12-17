@@ -62,6 +62,24 @@ export async function resolveExternalIdToBillingEntity(
     };
 }
 
+/**
+ * Find a local customer record by Polar customer ID.
+ * Used as a fallback when the Polar customer doesn't have an externalId set.
+ * 
+ * @param polarCustomerId - The Polar customer ID
+ * @returns The customer record with userId and organizationId, or null if not found
+ */
+export async function findLocalCustomerByPolarId(polarCustomerId: string) {
+    return await prisma.customer.findUnique({
+        where: { polarCustomerId },
+        select: {
+            id: true,
+            userId: true,
+            organizationId: true,
+        }
+    });
+}
+
 export async function upsertCustomer(polarCustomerId: string, userId?: string, organizationId?: string) {
     if (!userId && !organizationId) {
         throw new Error('Either userId or organizationId must be provided')
