@@ -333,8 +333,10 @@ POLAR_WEBHOOK_SECRET=your_webhook_secret
 # Database migrations
 npx prisma migrate dev
 
-# Create Polar meters
-npx tsx lib/metering/setup-meters.ts
+# Create Polar meters (use dotenv to load env vars)
+npx dotenv -e .env.local -- npx tsx lib/metering/setup-meters.ts
 
 # Then add metered prices to products in Polar dashboard
 ```
+
+> **Note:** The setup script uses your org-scoped `POLAR_ACCESS_TOKEN` to auto-detect the organization.

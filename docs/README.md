@@ -89,5 +89,7 @@ POLAR_WEBHOOK_SECRET=your_webhook_secret
 
 1. Set up your environment variables
 2. Run database migrations: `npx prisma migrate dev`
-3. Create Polar meters: `npx tsx lib/metering/setup-meters.ts`
+3. Create Polar meters: `npx dotenv -e .env.local -- npx tsx lib/metering/setup-meters.ts`
 4. Add metered prices to your products in the Polar dashboard
+
+> **Note:** The setup script uses `dotenv-cli` to load your `.env.local` file since `tsx` doesn't auto-load environment variables.

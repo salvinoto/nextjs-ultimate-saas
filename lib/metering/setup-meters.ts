@@ -69,36 +69,30 @@ const METERS: MeterConfig[] = [
 ];
 
 async function setupMeters() {
-  const organizationId = process.env.POLAR_ORGANIZATION_ID;
-  
-  if (!organizationId) {
-    console.error('POLAR_ORGANIZATION_ID environment variable is required');
-    process.exit(1);
-  }
-
   console.log('Setting up Polar meters...\n');
 
   for (const meter of METERS) {
     try {
       console.log(`Creating meter: ${meter.name}...`);
       
+      // Note: Don't pass organizationId when using an organization-scoped token
+      // The token already determines which org to use
       const result = await polar.meters.create({
         name: meter.name,
         filter: meter.filter,
         aggregation: meter.aggregation,
-        organizationId,
         metadata: { slug: meter.slug },
       });
 
-      console.log(`  Created: ${result.id}`);
+      console.log(`  ✓ Created: ${result.id}`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       
       // Check if meter already exists
-      if (errorMessage.includes('already exists') || errorMessage.includes('duplicate')) {
-        console.log(`  Meter "${meter.name}" already exists, skipping...`);
+      if (errorMessage.includes('already exists') || errorMessage.includes('duplicate') || errorMessage.includes('unique')) {
+        console.log(`  ⊘ Meter "${meter.name}" already exists, skipping...`);
       } else {
-        console.error(`  Failed to create meter "${meter.name}":`, errorMessage);
+        console.error(`  ✗ Failed to create meter "${meter.name}":`, errorMessage);
       }
     }
   }

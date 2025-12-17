@@ -151,8 +151,10 @@ export async function generateSummary(text: string) {
 ## Setup
 
 ```bash
-# Create meters in Polar
-npx tsx lib/metering/setup-meters.ts
+# Create meters in Polar (use dotenv to load env vars)
+npx dotenv -e .env.local -- npx tsx lib/metering/setup-meters.ts
 
 # Then add metered prices to products in Polar dashboard
 ```
+
+> **Note:** Uses your org-scoped `POLAR_ACCESS_TOKEN` to auto-detect the organization.

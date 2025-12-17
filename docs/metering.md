@@ -98,8 +98,11 @@ if (!status.allowed) {
 Run the setup script to create meters in your Polar account:
 
 ```bash
-npx tsx lib/metering/setup-meters.ts
+# Load env vars and run the setup script
+npx dotenv -e .env.local -- npx tsx lib/metering/setup-meters.ts
 ```
+
+> **Note:** The script uses your `POLAR_ACCESS_TOKEN` which should be an **organization-scoped token**. When using such a token, the organization is automatically determined—you don't need to pass `organizationId` explicitly.
 
 ### Option 2: Manual Setup in Polar Dashboard
 
@@ -506,6 +509,20 @@ export async function expensiveAIOperation(input: string) {
 ---
 
 ## Troubleshooting
+
+### Setup Script Fails with "Environment variable is required"
+
+The `tsx` command doesn't automatically load `.env` files. Use `dotenv-cli` to load your environment:
+
+```bash
+npx dotenv -e .env.local -- npx tsx lib/metering/setup-meters.ts
+```
+
+### Setup Script Fails with "organization_id is disallowed"
+
+If you see an error like `"Setting organization_id is disallowed when using an organization token"`, your `POLAR_ACCESS_TOKEN` is an **organization-scoped token**. This is correct—the setup script automatically handles this by not passing `organizationId` when creating meters.
+
+Make sure you're using the latest version of `lib/metering/setup-meters.ts`.
 
 ### Events Not Showing in Polar
 
