@@ -20,7 +20,6 @@ import {
   Calendar,
   CheckCircle2,
   CreditCard,
-  ExternalLink,
   User,
 } from "lucide-react";
 import { BillingPortalButton } from "./billing-portal-button";
@@ -80,25 +79,29 @@ export default async function BillingPage() {
       })
     : null;
 
-  // Generate the portal URL
+  // Generate the portal URL using externalCustomerId (billingEntityId)
+  // This works even if the customer hasn't been stored in our local DB yet
   let portalUrl: string | null = null;
-  if (customer.customer?.polarCustomerId) {
-    try {
-      const session = await polar.customerSessions.create({
-        customerId: customer.customer.polarCustomerId,
-      });
+  
+  try {
+    // Use billingEntityId (user or org ID) as the external customer ID
+    // This is the same ID we set during checkout with externalCustomerId
+    const session = await polar.customerSessions.create({
+      externalCustomerId: customer.billingEntityId,
+    });
 
-      const organizationName = (process.env.POLAR_ORGANIZATION_NAME ?? "")
-        .toLowerCase()
-        .replace(/\s+/g, "-");
+    const organizationName = (process.env.POLAR_ORGANIZATION_NAME ?? "")
+      .toLowerCase()
+      .replace(/\s+/g, "-");
 
-      const baseUrl = "https://sandbox.polar.sh";
-      const url = new URL(`${organizationName}/portal`, baseUrl);
-      url.searchParams.set("customer_session_token", session.token);
-      portalUrl = url.toString();
-    } catch (error) {
-      console.error("Failed to create customer session:", error);
-    }
+    const baseUrl = "https://sandbox.polar.sh";
+    const url = new URL(`${organizationName}/portal`, baseUrl);
+    url.searchParams.set("customer_session_token", session.token);
+    portalUrl = url.toString();
+  } catch (error) {
+    console.error("Failed to create customer session:", error);
+    // If externalCustomerId fails (customer may not exist in Polar yet), 
+    // the portalUrl stays null and we show the "View Plans" fallback
   }
 
   return (
@@ -234,15 +237,13 @@ export default async function BillingPage() {
         <CardContent>
           {portalUrl ? (
             <BillingPortalButton portalUrl={portalUrl} />
-          ) : customer.customer?.polarCustomerId ? (
-            <p className="text-sm text-muted-foreground">
-              Unable to load billing portal. Please try again later.
-            </p>
           ) : (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                You don&apos;t have an active subscription yet. Choose a plan to
-                get started.
+                {subscription 
+                  ? "Unable to load billing portal. Please try again later."
+                  : "You don't have an active subscription yet. Choose a plan to get started."
+                }
               </p>
               <Button asChild>
                 <Link href="/products">View Plans</Link>

@@ -65,10 +65,19 @@ export async function GET(req: NextRequest) {
             metadata.organizationName = organization.name
         }
 
+        // Use organization ID if in org context, otherwise user ID
+        // This is the billing entity that Polar will use to track subscriptions and usage
+        const billingEntityId = organization?.id ?? session.user.id;
+
         const result = await polar.checkouts.create({
             products: [productId],
             successUrl: confirmationUrl,
             customerEmail: session.user.email,
+            customerName: session.user.name,
+            // Critical: Link Polar customer to your user/org ID
+            // This enables proper subscription tracking and usage metering
+            externalCustomerId: billingEntityId,
+            // Keep metadata for reference (optional, but useful for debugging)
             metadata,
         })
 

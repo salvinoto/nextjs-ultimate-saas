@@ -6,7 +6,7 @@ import type { WebhookSubscriptionCreatedPayload } from "@polar-sh/sdk/models/com
 import type { WebhookSubscriptionRevokedPayload } from "@polar-sh/sdk/models/components/webhooksubscriptionrevokedpayload.js";
 import type { WebhookSubscriptionUpdatedPayload } from "@polar-sh/sdk/models/components/webhooksubscriptionupdatedpayload.js";
 import type { Product } from "@polar-sh/sdk/models/components/product.js";
-import { linkSubscriptionToCustomer, upsertCustomer } from "@/lib/plans/db/customer";
+import { linkSubscriptionToCustomer, upsertCustomer, resolveExternalIdToBillingEntity } from "@/lib/plans/db/customer";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
@@ -157,6 +157,9 @@ type SubscriptionWebhookPayload =
 /**
  * Handle subscription events from Polar webhook.
  * Syncs subscription data to local database.
+ * 
+ * IMPORTANT: The user/org ID is extracted from customer.externalId, NOT from metadata.
+ * The externalId is set during checkout creation via the externalCustomerId parameter.
  */
 export async function handleSubscription(payload: SubscriptionWebhookPayload) {
     if (!payload?.data) {
@@ -166,6 +169,32 @@ export async function handleSubscription(payload: SubscriptionWebhookPayload) {
 
     const subData = payload.data;
     console.log('Processing subscription:', subData.id, subData.status);
+
+    // Extract the external customer ID from the Polar customer object
+    // This is the billingEntityId we set during checkout (user ID or org ID)
+    const customer = subData.customer as { externalId?: string } | undefined;
+    const externalId = customer?.externalId;
+
+    if (!externalId) {
+        console.error('No externalId found on customer. Subscription cannot be linked.', {
+            subscriptionId: subData.id,
+            customerId: subData.customerId,
+        });
+        throw new Error("Customer externalId is required to link subscription");
+    }
+
+    console.log('Resolving externalId:', externalId);
+
+    // Resolve the externalId to determine if it's a user or organization
+    const billingEntity = await resolveExternalIdToBillingEntity(externalId);
+
+    if (!billingEntity.found) {
+        console.error('Could not resolve externalId to user or organization:', externalId);
+        throw new Error(`Could not find user or organization for externalId: ${externalId}`);
+    }
+
+    const { userId, organizationId } = billingEntity;
+    console.log('Resolved billing entity:', { userId, organizationId });
 
     try {
         // Ensure the product exists if we have product data
@@ -177,7 +206,7 @@ export async function handleSubscription(payload: SubscriptionWebhookPayload) {
             }
         }
 
-        // Upsert the subscription
+        // Upsert the subscription with the resolved user/org IDs
         const subscription = await prisma.subscription.upsert({
             where: { id: subData.id },
             update: {
@@ -189,14 +218,18 @@ export async function handleSubscription(payload: SubscriptionWebhookPayload) {
                 endedAt: subData.endedAt ? new Date(subData.endedAt) : null,
                 metadata: subData.metadata,
                 customFieldData: subData.customFieldData,
-                productId: subData.productId
+                productId: subData.productId,
+                // Also update user/org on updates in case it changed
+                userId,
+                organizationId,
             },
             create: {
                 id: subData.id,
                 createdAt: new Date(subData.createdAt!),
                 modifiedAt: subData.modifiedAt ? new Date(subData.modifiedAt) : new Date(),
-                userId: subData.metadata.userId as string,
-                organizationId: subData.metadata.organizationId as string,
+                // Use resolved IDs from customer.externalId
+                userId,
+                organizationId,
                 amount: subData.amount!,
                 currency: subData.currency!,
                 recurringInterval: subData.recurringInterval,
@@ -215,12 +248,12 @@ export async function handleSubscription(payload: SubscriptionWebhookPayload) {
             }
         });
 
-        // Link customer to subscription
+        // Link customer to subscription using resolved IDs
         try {
             await upsertCustomer(
                 subData.customerId, 
-                subData.metadata.userId as string, 
-                subData.metadata.organizationId as string
+                userId ?? undefined, 
+                organizationId ?? undefined
             );
             await linkSubscriptionToCustomer({
                 subscriptionId: subData.id,
@@ -230,6 +263,7 @@ export async function handleSubscription(payload: SubscriptionWebhookPayload) {
             console.error('Error handling customer operations:', error);
         }
 
+        console.log('Successfully processed subscription:', subData.id);
         return subscription;
     } catch (error) {
         console.error('Error handling subscription:', error);
