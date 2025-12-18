@@ -6,9 +6,29 @@ Welcome to the Next.js Ultimate SaaS documentation. This guide covers the core s
 
 | Guide | Description |
 |-------|-------------|
+| [Setup Wizard](./setup.md) | First-time setup and configuration |
 | [Metering](./metering.md) | Usage-based billing with Polar meters |
 
 ## Quick Links
+
+### Setup Wizard
+
+Configure your development environment with the interactive setup wizard:
+
+```bash
+# Option 1: Web UI (auto-redirects if unconfigured)
+npm run dev
+
+# Option 2: CLI
+npm run setup
+```
+
+The setup wizard configures:
+- Database (PostgreSQL)
+- Authentication (Better Auth)
+- Email (Resend)
+- Payments (Polar)
+- Social OAuth providers
 
 ### Metering (Usage-Based Billing)
 
@@ -68,10 +88,36 @@ lib/
 │   ├── limits.ts        # Limit checking functions
 │   ├── types.ts         # TypeScript types
 │   └── setup-meters.ts  # Meter setup script
+├── setup/               # Setup wizard utilities
+│   ├── index.ts         # Module exports
+│   ├── config.ts        # Configuration checking (server-only)
+│   ├── types.ts         # TypeScript types
+│   ├── validation.ts    # Client-safe validation
+│   └── actions.ts       # Server actions
 ├── permissions.ts       # RBAC roles and permissions
 └── plans/
     └── db/
         └── customer.ts  # Customer database operations
+
+app/
+└── setup/               # Setup wizard pages
+    ├── layout.tsx
+    └── page.tsx
+
+components/
+└── setup/               # Setup wizard components
+    ├── setup-wizard.tsx
+    └── steps/
+        ├── welcome-step.tsx
+        ├── database-step.tsx
+        ├── auth-step.tsx
+        ├── email-step.tsx
+        ├── payments-step.tsx
+        └── complete-step.tsx
+
+scripts/
+├── setup.ts             # CLI setup wizard
+└── setup-check.ts       # Pre-dev check
 ```
 
 ## Environment Variables
@@ -87,8 +133,28 @@ POLAR_WEBHOOK_SECRET=your_webhook_secret
 
 ## Getting Started
 
-1. Set up your environment variables
-2. Run database migrations: `npx prisma migrate dev`
+### First-Time Setup
+
+Run the setup wizard to configure your environment:
+
+```bash
+npm run dev
+```
+
+If `.env.local` is missing, you'll be redirected to the setup wizard at `http://localhost:3000/setup`.
+
+Alternatively, use the CLI:
+
+```bash
+npm run setup
+```
+
+See the [Setup Wizard Guide](./setup.md) for detailed instructions.
+
+### After Setup
+
+1. Restart the dev server to apply configuration
+2. Run database migrations if not done during setup: `npx prisma db push`
 3. Create Polar meters: `npx dotenv -e .env.local -- npx tsx lib/metering/setup-meters.ts`
 4. Add metered prices to your products in the Polar dashboard
 
