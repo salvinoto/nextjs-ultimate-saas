@@ -5,8 +5,7 @@
   "private": true,
   "scripts": {
     "setup": "tsx scripts/setup.ts",
-    "predev": "tsx scripts/setup-check.ts",
-    "prebuild": "tsx scripts/setup-check.ts",
+    "setup:cli": "tsx scripts/setup.ts",
     "dev": "next dev",
     "dev:secure": "next dev --experimental-https",
     "typecheck": "tsc --noEmit",
