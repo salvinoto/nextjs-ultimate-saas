@@ -52,7 +52,7 @@ interface LogSummary {
   auth: { configured: boolean; url?: string };
   email: { configured: boolean };
   payments: { configured: boolean; server?: string };
-  migrations: { success: boolean; error?: string };
+  migrations: { success: boolean; error?: string; skipped?: boolean };
   cleanup: { performed: boolean; files?: string[] };
 }
 
@@ -114,9 +114,14 @@ export async function writeSetupLog(summary: LogSummary): Promise<ActionResult<{
     content += `Payments:  ${paymentsStatus}\n`;
     if (summary.payments.server) content += `           Server: ${summary.payments.server}\n`;
 
-    const migrationsStatus = summary.migrations.success ? "✓ Success" : "✗ Failed";
+    const migrationsStatus = summary.migrations.skipped 
+      ? "○ Skipped (manual)" 
+      : summary.migrations.success 
+        ? "✓ Success" 
+        : "✗ Failed";
     content += `\nDatabase Migrations: ${migrationsStatus}\n`;
     if (summary.migrations.error) content += `           Error: ${summary.migrations.error}\n`;
+    if (summary.migrations.skipped) content += `           Command: npx prisma generate && npx prisma db push\n`;
 
     const cleanupStatus = summary.cleanup.performed ? "✓ Performed" : "○ Skipped";
     content += `\nCleanup:   ${cleanupStatus}\n`;
@@ -338,21 +343,28 @@ export async function runDatabaseMigrations(): Promise<ActionResult> {
 // Cleanup Actions
 // ============================================
 
-const SETUP_FILES = [
-  "app/setup",
+// Files to cleanup immediately (safe to delete while app is running)
+const SETUP_FILES_SAFE = [
   "components/setup",
   "lib/setup",
   "scripts/setup.ts",
   "scripts/setup-check.ts",
 ];
 
-export async function getCleanupFiles(): Promise<ActionResult<{ files: string[] }>> {
+// Files that require manual deletion after restart
+// (can't delete app/setup while user is on that page)
+const SETUP_FILES_MANUAL = [
+  "app/setup",
+];
+
+export async function getCleanupFiles(): Promise<ActionResult<{ files: string[]; manualFiles: string[] }>> {
   const cwd = process.cwd();
-  const existingFiles = SETUP_FILES.filter((file) => existsSync(path.join(cwd, file)));
-  return { success: true, data: { files: existingFiles } };
+  const existingFiles = SETUP_FILES_SAFE.filter((file) => existsSync(path.join(cwd, file)));
+  const manualFiles = SETUP_FILES_MANUAL.filter((file) => existsSync(path.join(cwd, file)));
+  return { success: true, data: { files: existingFiles, manualFiles } };
 }
 
-export async function cleanupSetupFiles(): Promise<ActionResult<{ removedFiles: string[] }>> {
+export async function cleanupSetupFiles(): Promise<ActionResult<{ removedFiles: string[]; manualFiles: string[] }>> {
   if (!isSetupAllowed()) {
     return { success: false, error: "Cleanup is not allowed in production" };
   }
@@ -361,9 +373,11 @@ export async function cleanupSetupFiles(): Promise<ActionResult<{ removedFiles: 
 
   const cwd = process.cwd();
   const removedFiles: string[] = [];
-  const errors: string[] = [];
+  const manualFiles: string[] = [];
 
-  for (const file of SETUP_FILES) {
+  // Only delete files that are safe to delete while the app is running
+  // (we can't delete app/setup while the user is still on that page)
+  for (const file of SETUP_FILES_SAFE) {
     const fullPath = path.join(cwd, file);
     
     if (!existsSync(fullPath)) continue;
@@ -381,8 +395,16 @@ export async function cleanupSetupFiles(): Promise<ActionResult<{ removedFiles: 
       logMessage("success", `Removed ${file}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      errors.push(`Failed to remove ${file}: ${message}`);
       logMessage("error", `Failed to remove ${file}`, message);
+    }
+  }
+
+  // Track files that need manual deletion
+  for (const file of SETUP_FILES_MANUAL) {
+    const fullPath = path.join(cwd, file);
+    if (existsSync(fullPath)) {
+      manualFiles.push(file);
+      logMessage("info", `${file} requires manual deletion after restart`);
     }
   }
 
@@ -456,7 +478,10 @@ export const config = {
   }
 
   logMessage("info", `Cleanup completed: ${removedFiles.length} items removed`);
+  if (manualFiles.length > 0) {
+    logMessage("info", `${manualFiles.length} items require manual deletion after restart`);
+  }
 
-  return { success: true, data: { removedFiles } };
+  return { success: true, data: { removedFiles, manualFiles } };
 }
 

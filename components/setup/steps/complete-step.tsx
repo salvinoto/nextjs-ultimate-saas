@@ -18,7 +18,8 @@ import {
   Rocket,
   RefreshCw,
   Trash2,
-  FileText
+  FileText,
+  AlertTriangle
 } from "lucide-react";
 import { 
   saveConfiguration, 
@@ -35,22 +36,27 @@ interface CompleteStepProps {
   onPrev: () => void;
 }
 
-type SetupPhase = "review" | "saving" | "migrating" | "cleaning" | "logging" | "complete" | "error";
+type SetupPhase = "review" | "saving" | "migrating" | "logging" | "complete" | "cleaning" | "error";
 
 export function CompleteStep({ formData, onPrev }: CompleteStepProps) {
   const [phase, setPhase] = useState<SetupPhase>("review");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [shouldRunMigrations, setShouldRunMigrations] = useState(true);
   const [shouldCleanup, setShouldCleanup] = useState(false);
   const [cleanupFiles, setCleanupFiles] = useState<string[]>([]);
-  const [removedFiles, setRemovedFiles] = useState<string[]>([]);
+  const [manualCleanupFiles, setManualCleanupFiles] = useState<string[]>([]);
   const [logPath, setLogPath] = useState<string | null>(null);
+  const [cleanupComplete, setCleanupComplete] = useState(false);
+  const [cleanedFiles, setCleanedFiles] = useState<string[]>([]);
+  const [migrationsSkipped, setMigrationsSkipped] = useState(false);
 
   useEffect(() => {
     // Get list of cleanup files on mount
     getCleanupFiles().then((result) => {
       if (result.success && result.data) {
         setCleanupFiles(result.data.files);
+        setManualCleanupFiles(result.data.manualFiles);
       }
     });
   }, []);
@@ -97,26 +103,16 @@ export function CompleteStep({ formData, onPrev }: CompleteStepProps) {
         return;
       }
 
-      // Phase 2: Run migrations
-      setPhase("migrating");
-      const migrateResult = await runDatabaseMigrations();
-      const migrationsSuccess = migrateResult.success;
-      const migrationsError = migrateResult.error;
-
-      // Phase 3: Cleanup (if requested)
-      let cleanupPerformed = false;
-      let cleanedFiles: string[] = [];
-      if (shouldCleanup && cleanupFiles.length > 0) {
-        setPhase("cleaning");
-        const cleanupResult = await cleanupSetupFiles();
-        if (cleanupResult.success && cleanupResult.data) {
-          cleanupPerformed = true;
-          cleanedFiles = cleanupResult.data.removedFiles;
-          setRemovedFiles(cleanedFiles);
-        }
+      // Phase 2: Run migrations (optional)
+      let migrateResult: { success: boolean; error?: string } = { success: true };
+      if (shouldRunMigrations) {
+        setPhase("migrating");
+        migrateResult = await runDatabaseMigrations();
+      } else {
+        setMigrationsSkipped(true);
       }
 
-      // Phase 4: Write log
+      // Phase 3: Write log (cleanup info will be added later if performed)
       setPhase("logging");
       let dbHost: string | undefined;
       try {
@@ -140,12 +136,13 @@ export function CompleteStep({ formData, onPrev }: CompleteStepProps) {
           server: formData.payments.POLAR_SERVER,
         },
         migrations: {
-          success: migrationsSuccess,
-          error: migrationsError,
+          success: migrateResult.success,
+          error: migrateResult.error,
+          skipped: !shouldRunMigrations,
         },
         cleanup: {
-          performed: cleanupPerformed,
-          files: cleanedFiles,
+          performed: false, // Will be updated if cleanup is performed
+          files: [],
         },
       });
 
@@ -154,12 +151,54 @@ export function CompleteStep({ formData, onPrev }: CompleteStepProps) {
       }
 
       // Complete (even if migrations failed, we want to show the result)
-      if (!migrationsSuccess) {
-        setError(migrationsError || "Database migrations failed");
+      if (!migrateResult.success) {
+        setError(migrateResult.error || "Database migrations failed");
       }
       setPhase("complete");
     });
   };
+
+  // Handle navigation with optional cleanup
+  const handleFinish = async (performCleanup: boolean) => {
+    if (performCleanup) {
+      setPhase("cleaning");
+      
+      // Run cleanup - it will skip app/setup since user is on that page
+      const result = await cleanupSetupFiles();
+      
+      if (result.success && result.data) {
+        setCleanedFiles(result.data.removedFiles);
+        setManualCleanupFiles(result.data.manualFiles);
+      }
+      
+      setCleanupComplete(true);
+      setPhase("complete");
+    } else {
+      window.location.href = "/";
+    }
+  };
+
+  if (phase === "cleaning") {
+    return (
+      <div className="space-y-8">
+        <div className="text-center space-y-4">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-orange-500/20 to-orange-500/5 border border-orange-500/20">
+            <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
+          </div>
+          <h2 className="text-3xl font-bold tracking-tight">Cleaning Up...</h2>
+          <p className="text-muted-foreground max-w-lg mx-auto">
+            Removing setup files and redirecting to home page.
+          </p>
+        </div>
+        <Alert className="border-orange-500/20 bg-orange-500/5">
+          <Loader2 className="h-4 w-4 animate-spin text-orange-500" />
+          <AlertDescription className="ml-2">
+            Deleting setup wizard files...
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   if (phase === "complete") {
     return (
@@ -189,9 +228,24 @@ export function CompleteStep({ formData, onPrev }: CompleteStepProps) {
           <CheckCircle2 className="h-4 w-4 text-green-500" />
           <AlertTitle>Configuration saved to .env.local</AlertTitle>
           <AlertDescription>
-            {!error && "Database migrations have been applied successfully."}
+            {migrationsSkipped 
+              ? "You'll need to run database migrations manually."
+              : !error && "Database migrations have been applied successfully."}
           </AlertDescription>
         </Alert>
+
+        {migrationsSkipped && (
+          <Alert className="border-orange-500/20 bg-orange-500/5">
+            <AlertTriangle className="h-4 w-4 text-orange-500" />
+            <AlertTitle>Migrations Skipped</AlertTitle>
+            <AlertDescription className="space-y-2">
+              <p>Run the following commands to set up your database:</p>
+              <div className="p-2 bg-muted rounded font-mono text-xs">
+                npx prisma generate && npx prisma db push
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
 
         {logPath && (
           <Alert className="border-blue-500/20 bg-blue-500/5">
@@ -203,12 +257,32 @@ export function CompleteStep({ formData, onPrev }: CompleteStepProps) {
           </Alert>
         )}
 
-        {removedFiles.length > 0 && (
-          <Alert className="border-orange-500/20 bg-orange-500/5">
-            <Trash2 className="h-4 w-4 text-orange-500" />
+        {cleanupComplete && cleanedFiles.length > 0 && (
+          <Alert className="border-green-500/20 bg-green-500/5">
+            <Trash2 className="h-4 w-4 text-green-500" />
             <AlertTitle>Cleanup Completed</AlertTitle>
             <AlertDescription>
-              Removed {removedFiles.length} setup files/directories
+              Removed {cleanedFiles.length} setup files
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {cleanupComplete && manualCleanupFiles.length > 0 && (
+          <Alert className="border-orange-500/20 bg-orange-500/5">
+            <AlertTriangle className="h-4 w-4 text-orange-500" />
+            <AlertTitle>Manual Cleanup Required</AlertTitle>
+            <AlertDescription className="space-y-2">
+              <p>
+                The following files require manual deletion after you restart the dev server:
+              </p>
+              <ul className="list-disc list-inside text-sm">
+                {manualCleanupFiles.map((file) => (
+                  <li key={file}><code className="text-xs bg-muted px-1 rounded">{file}</code></li>
+                ))}
+              </ul>
+              <div className="mt-2 p-2 bg-muted rounded font-mono text-xs">
+                rm -rf {manualCleanupFiles.join(" ")}
+              </div>
             </AlertDescription>
           </Alert>
         )}
@@ -228,12 +302,14 @@ export function CompleteStep({ formData, onPrev }: CompleteStepProps) {
                 Configuration saved to <code className="text-xs bg-muted px-1 rounded">.env.local</code>
               </li>
               <li className="flex items-center gap-2">
-                {error ? (
+                {migrationsSkipped ? (
+                  <AlertTriangle className="w-4 h-4 text-orange-500" />
+                ) : error ? (
                   <AlertCircle className="w-4 h-4 text-destructive" />
                 ) : (
                   <CheckCircle2 className="w-4 h-4 text-green-500" />
                 )}
-                Database schema {error ? "needs manual setup" : "pushed via Prisma"}
+                Database schema {migrationsSkipped ? "needs manual setup" : error ? "failed - needs manual setup" : "pushed via Prisma"}
               </li>
               {logPath && (
                 <li className="flex items-center gap-2">
@@ -249,15 +325,61 @@ export function CompleteStep({ formData, onPrev }: CompleteStepProps) {
           </CardContent>
         </Card>
 
-        <div className="flex justify-center pt-4">
-          <Button
-            size="lg"
-            onClick={() => window.location.href = "/"}
-            className="gap-2 px-8"
-          >
-            <Rocket className="w-4 h-4" />
-            Go to Home
-          </Button>
+        {/* Cleanup option - shown at completion time (only if not already cleaned) */}
+        {!cleanupComplete && shouldCleanup && cleanupFiles.length > 0 && (
+          <Alert className="border-orange-500/20 bg-orange-500/5">
+            <AlertTriangle className="h-4 w-4 text-orange-500" />
+            <AlertTitle>Cleanup Ready</AlertTitle>
+            <AlertDescription>
+              Click "Finish & Clean Up" to remove setup files. Some files will require
+              manual deletion after restarting the server.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <div className="flex flex-col sm:flex-row justify-center gap-3 pt-4">
+          {cleanupComplete ? (
+            // After cleanup is done, show a single button to go home
+            <Button
+              size="lg"
+              onClick={() => window.location.href = "/"}
+              className="gap-2 px-8"
+            >
+              <Rocket className="w-4 h-4" />
+              Go to Home
+            </Button>
+          ) : shouldCleanup && cleanupFiles.length > 0 ? (
+            // User selected cleanup, show both options
+            <>
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => handleFinish(false)}
+                className="gap-2"
+              >
+                <Rocket className="w-4 h-4" />
+                Skip Cleanup & Go Home
+              </Button>
+              <Button
+                size="lg"
+                onClick={() => handleFinish(true)}
+                className="gap-2 bg-orange-500 hover:bg-orange-600"
+              >
+                <Trash2 className="w-4 h-4" />
+                Finish & Clean Up
+              </Button>
+            </>
+          ) : (
+            // No cleanup selected
+            <Button
+              size="lg"
+              onClick={() => handleFinish(false)}
+              className="gap-2 px-8"
+            >
+              <Rocket className="w-4 h-4" />
+              Go to Home
+            </Button>
+          )}
         </div>
       </div>
     );
@@ -345,7 +467,46 @@ export function CompleteStep({ formData, onPrev }: CompleteStepProps) {
         </CardContent>
       </Card>
 
-      {cleanupFiles.length > 0 && (
+      {/* Database Migrations Option */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Database className="w-4 h-4" />
+            Database Migrations
+          </CardTitle>
+          <CardDescription>
+            Run Prisma migrations to set up your database schema
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-start gap-3">
+            <Checkbox
+              id="migrations"
+              checked={shouldRunMigrations}
+              onCheckedChange={(checked) => setShouldRunMigrations(checked === true)}
+            />
+            <div className="space-y-1">
+              <Label htmlFor="migrations" className="cursor-pointer">
+                Run database migrations automatically
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                This will run <code className="bg-muted px-1 rounded">prisma generate</code> and{" "}
+                <code className="bg-muted px-1 rounded">prisma db push</code> to set up your database schema.
+              </p>
+              {!shouldRunMigrations && (
+                <p className="text-xs text-orange-600 dark:text-orange-400 mt-2">
+                  You'll need to run migrations manually after setup:
+                  <code className="block bg-muted px-2 py-1 rounded mt-1">
+                    npx prisma generate && npx prisma db push
+                  </code>
+                </p>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {(cleanupFiles.length > 0 || manualCleanupFiles.length > 0) && (
         <Card className="border-dashed">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
@@ -367,16 +528,32 @@ export function CompleteStep({ formData, onPrev }: CompleteStepProps) {
                 <Label htmlFor="cleanup" className="cursor-pointer">
                   Remove setup files after completion
                 </Label>
-                <p className="text-xs text-muted-foreground">
-                  This will remove the following:
-                </p>
-                <ul className="text-xs text-muted-foreground list-disc list-inside">
-                  {cleanupFiles.map((file) => (
-                    <li key={file}>{file}</li>
-                  ))}
-                  <li>Setup scripts from package.json</li>
-                  <li>Setup redirect from proxy.ts</li>
-                </ul>
+                {cleanupFiles.length > 0 && (
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      The following will be removed automatically:
+                    </p>
+                    <ul className="text-xs text-muted-foreground list-disc list-inside">
+                      {cleanupFiles.map((file) => (
+                        <li key={file}>{file}</li>
+                      ))}
+                      <li>Setup scripts from package.json</li>
+                      <li>Setup redirect from proxy.ts</li>
+                    </ul>
+                  </>
+                )}
+                {manualCleanupFiles.length > 0 && (
+                  <>
+                    <p className="text-xs text-orange-600 dark:text-orange-400 mt-2">
+                      The following will require manual deletion after restart:
+                    </p>
+                    <ul className="text-xs text-orange-600 dark:text-orange-400 list-disc list-inside">
+                      {manualCleanupFiles.map((file) => (
+                        <li key={file}>{file}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
               </div>
             </div>
           </CardContent>
@@ -389,7 +566,6 @@ export function CompleteStep({ formData, onPrev }: CompleteStepProps) {
           <AlertDescription className="ml-2">
             {phase === "saving" && "Saving configuration to .env.local..."}
             {phase === "migrating" && "Running database migrations..."}
-            {phase === "cleaning" && "Cleaning up setup files..."}
             {phase === "logging" && "Writing setup log..."}
           </AlertDescription>
         </Alert>
