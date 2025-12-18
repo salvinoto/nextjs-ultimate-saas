@@ -1,5 +1,8 @@
-import 'dotenv/config'
+import { config } from 'dotenv'
 import { defineConfig } from 'prisma/config'
+
+// Load .env.local explicitly for Prisma CLI
+config({ path: '.env.local' })
 
 export default defineConfig({
   schema: 'prisma/schema.prisma',
