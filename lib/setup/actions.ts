@@ -1,7 +1,7 @@
 "use server";
 
-import { writeFile, readFile } from "fs/promises";
-import { existsSync } from "fs";
+import { writeFile, readFile, appendFile } from "fs/promises";
+import { existsSync, rmSync, statSync, writeFileSync } from "fs";
 import path from "path";
 import { Pool } from "pg";
 import * as crypto from "node:crypto";
@@ -14,6 +14,136 @@ interface ActionResult<T = void> {
   error?: string;
 }
 
+// ============================================
+// Logger for Web UI
+// ============================================
+
+interface LogEntry {
+  timestamp: string;
+  level: "info" | "success" | "warning" | "error";
+  message: string;
+  details?: string;
+}
+
+let logEntries: LogEntry[] = [];
+let logStartTime: Date | null = null;
+
+function logMessage(level: LogEntry["level"], message: string, details?: string) {
+  if (!logStartTime) {
+    logStartTime = new Date();
+  }
+  logEntries.push({
+    timestamp: new Date().toISOString(),
+    level,
+    message,
+    details,
+  });
+}
+
+export async function startSetupLog(): Promise<ActionResult> {
+  logEntries = [];
+  logStartTime = new Date();
+  logMessage("info", "Setup wizard started (Web UI)");
+  return { success: true };
+}
+
+interface LogSummary {
+  database: { configured: boolean; host?: string };
+  auth: { configured: boolean; url?: string };
+  email: { configured: boolean };
+  payments: { configured: boolean; server?: string };
+  migrations: { success: boolean; error?: string };
+  cleanup: { performed: boolean; files?: string[] };
+}
+
+export async function writeSetupLog(summary: LogSummary): Promise<ActionResult<{ path: string }>> {
+  if (!isSetupAllowed()) {
+    return { success: false, error: "Setup is not allowed in production" };
+  }
+
+  try {
+    const logPath = path.join(process.cwd(), "setup.log");
+    const endTime = new Date();
+    const duration = logStartTime 
+      ? ((endTime.getTime() - logStartTime.getTime()) / 1000).toFixed(1) 
+      : "0";
+
+    let content = "";
+    content += "=".repeat(60) + "\n";
+    content += "Next.js Ultimate SaaS - Setup Log\n";
+    content += "=".repeat(60) + "\n\n";
+    content += `Started:  ${logStartTime?.toISOString() || "Unknown"}\n`;
+    content += `Finished: ${endTime.toISOString()}\n`;
+    content += `Duration: ${duration}s\n`;
+    content += `Mode:     Web UI\n\n`;
+
+    content += "-".repeat(60) + "\n";
+    content += "Timeline\n";
+    content += "-".repeat(60) + "\n\n";
+
+    for (const entry of logEntries) {
+      const prefix = {
+        info: "[INFO]   ",
+        success: "[SUCCESS]",
+        warning: "[WARNING]",
+        error: "[ERROR]  ",
+      }[entry.level];
+      const time = new Date(entry.timestamp).toTimeString().split(" ")[0];
+      content += `${time} ${prefix} ${entry.message}\n`;
+      if (entry.details) {
+        content += `                    ${entry.details}\n`;
+      }
+    }
+
+    content += "\n" + "-".repeat(60) + "\n";
+    content += "Configuration Summary\n";
+    content += "-".repeat(60) + "\n\n";
+
+    const dbStatus = summary.database.configured ? "✓ Configured" : "✗ Not configured";
+    content += `Database:  ${dbStatus}\n`;
+    if (summary.database.host) content += `           Host: ${summary.database.host}\n`;
+
+    const authStatus = summary.auth.configured ? "✓ Configured" : "✗ Not configured";
+    content += `Auth:      ${authStatus}\n`;
+    if (summary.auth.url) content += `           URL: ${summary.auth.url}\n`;
+
+    const emailStatus = summary.email.configured ? "✓ Configured" : "○ Skipped";
+    content += `Email:     ${emailStatus}\n`;
+
+    const paymentsStatus = summary.payments.configured ? "✓ Configured" : "○ Skipped";
+    content += `Payments:  ${paymentsStatus}\n`;
+    if (summary.payments.server) content += `           Server: ${summary.payments.server}\n`;
+
+    const migrationsStatus = summary.migrations.success ? "✓ Success" : "✗ Failed";
+    content += `\nDatabase Migrations: ${migrationsStatus}\n`;
+    if (summary.migrations.error) content += `           Error: ${summary.migrations.error}\n`;
+
+    const cleanupStatus = summary.cleanup.performed ? "✓ Performed" : "○ Skipped";
+    content += `\nCleanup:   ${cleanupStatus}\n`;
+    if (summary.cleanup.files && summary.cleanup.files.length > 0) {
+      content += `           Removed:\n`;
+      for (const file of summary.cleanup.files) {
+        content += `             - ${file}\n`;
+      }
+    }
+
+    content += "\n" + "=".repeat(60) + "\n";
+    content += "End of Setup Log\n";
+    content += "=".repeat(60) + "\n";
+
+    await writeFile(logPath, content, "utf-8");
+
+    return { success: true, data: { path: logPath } };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return { success: false, error: message };
+  }
+}
+
+// ============================================
+// Setup Actions
+// ============================================
+
 /**
  * Test database connection
  */
@@ -24,10 +154,14 @@ export async function testDatabaseConnection(
     return { success: false, error: "Setup is not allowed in production" };
   }
 
+  logMessage("info", "Testing database connection");
+
   try {
     const pool = new Pool({ connectionString });
     const result = await pool.query("SELECT version()");
     await pool.end();
+    
+    logMessage("success", "Database connection successful", result.rows[0].version);
     
     return {
       success: true,
@@ -35,6 +169,7 @@ export async function testDatabaseConnection(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Connection failed";
+    logMessage("error", "Database connection failed", message);
     return { success: false, error: message };
   }
 }
@@ -48,6 +183,7 @@ export async function generateAuthSecret(): Promise<ActionResult<{ secret: strin
   }
 
   const secret = crypto.randomBytes(32).toString("hex");
+  logMessage("info", "Generated new BETTER_AUTH_SECRET");
   return { success: true, data: { secret } };
 }
 
@@ -60,6 +196,8 @@ export async function saveConfiguration(
   if (!isSetupAllowed()) {
     return { success: false, error: "Setup is not allowed in production" };
   }
+
+  logMessage("info", "Saving configuration to .env.local");
 
   try {
     const envPath = path.join(process.cwd(), ".env.local");
@@ -82,16 +220,12 @@ export async function saveConfiguration(
     // Merge with new config
     const newVars: Record<string, string> = {
       ...existingVars,
-      // Database
       DATABASE_URL: config.database.DATABASE_URL,
       DIRECT_URL: config.database.DIRECT_URL || config.database.DATABASE_URL,
-      // Auth
       BETTER_AUTH_URL: config.auth.BETTER_AUTH_URL,
       BETTER_AUTH_SECRET: config.auth.BETTER_AUTH_SECRET,
       BETTER_AUTH_EMAIL: config.auth.BETTER_AUTH_EMAIL,
-      // Email
       RESEND_API_KEY: config.email.RESEND_API_KEY,
-      // Payments
       POLAR_ACCESS_TOKEN: config.payments.POLAR_ACCESS_TOKEN,
       POLAR_ORGANIZATION_ID: config.payments.POLAR_ORGANIZATION_ID,
       POLAR_SERVER: config.payments.POLAR_SERVER,
@@ -151,10 +285,17 @@ export async function saveConfiguration(
     }
 
     await writeFile(envPath, envContent, "utf-8");
+    
+    logMessage("success", "Configuration saved to .env.local");
+    logMessage("info", "Database configured", config.database.DATABASE_URL ? "URL provided" : "Not set");
+    logMessage("info", "Auth configured", `URL: ${config.auth.BETTER_AUTH_URL}`);
+    if (config.email.RESEND_API_KEY) logMessage("info", "Email configured");
+    if (config.payments.POLAR_ACCESS_TOKEN) logMessage("info", "Payments configured", `Server: ${config.payments.POLAR_SERVER}`);
 
     return { success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to save configuration";
+    logMessage("error", "Failed to save configuration", message);
     return { success: false, error: message };
   }
 }
@@ -167,23 +308,155 @@ export async function runDatabaseMigrations(): Promise<ActionResult> {
     return { success: false, error: "Setup is not allowed in production" };
   }
 
+  logMessage("info", "Running database migrations");
+
   try {
     const { execSync } = await import("child_process");
     
+    logMessage("info", "Running prisma generate");
     execSync("npx prisma generate", { 
       cwd: process.cwd(),
       stdio: "pipe",
     });
     
+    logMessage("info", "Running prisma db push");
     execSync("npx prisma db push", { 
       cwd: process.cwd(),
       stdio: "pipe",
     });
 
+    logMessage("success", "Database migrations completed");
     return { success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Migration failed";
+    logMessage("error", "Database migrations failed", message);
     return { success: false, error: message };
   }
+}
+
+// ============================================
+// Cleanup Actions
+// ============================================
+
+const SETUP_FILES = [
+  "app/setup",
+  "components/setup",
+  "lib/setup",
+  "scripts/setup.ts",
+  "scripts/setup-check.ts",
+];
+
+export async function getCleanupFiles(): Promise<ActionResult<{ files: string[] }>> {
+  const cwd = process.cwd();
+  const existingFiles = SETUP_FILES.filter((file) => existsSync(path.join(cwd, file)));
+  return { success: true, data: { files: existingFiles } };
+}
+
+export async function cleanupSetupFiles(): Promise<ActionResult<{ removedFiles: string[] }>> {
+  if (!isSetupAllowed()) {
+    return { success: false, error: "Cleanup is not allowed in production" };
+  }
+
+  logMessage("info", "Starting cleanup of setup files");
+
+  const cwd = process.cwd();
+  const removedFiles: string[] = [];
+  const errors: string[] = [];
+
+  for (const file of SETUP_FILES) {
+    const fullPath = path.join(cwd, file);
+    
+    if (!existsSync(fullPath)) continue;
+
+    try {
+      const stats = statSync(fullPath);
+      
+      if (stats.isDirectory()) {
+        rmSync(fullPath, { recursive: true, force: true });
+      } else {
+        rmSync(fullPath, { force: true });
+      }
+      
+      removedFiles.push(file);
+      logMessage("success", `Removed ${file}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      errors.push(`Failed to remove ${file}: ${message}`);
+      logMessage("error", `Failed to remove ${file}`, message);
+    }
+  }
+
+  // Update package.json
+  try {
+    const packageJsonPath = path.join(cwd, "package.json");
+    const packageJsonContent = await readFile(packageJsonPath, "utf-8");
+    const pkg = JSON.parse(packageJsonContent);
+
+    if (pkg.scripts) {
+      let modified = false;
+      for (const script of ["setup", "setup:cli"]) {
+        if (pkg.scripts[script]) {
+          delete pkg.scripts[script];
+          modified = true;
+        }
+      }
+      if (modified) {
+        await writeFile(packageJsonPath, JSON.stringify(pkg, null, 2) + "\n", "utf-8");
+        removedFiles.push("package.json scripts");
+        logMessage("success", "Removed setup scripts from package.json");
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    logMessage("error", "Failed to update package.json", message);
+  }
+
+  // Update proxy.ts
+  try {
+    const proxyPath = path.join(cwd, "proxy.ts");
+    if (existsSync(proxyPath)) {
+      const simplifiedProxy = `import { betterFetch } from "@better-fetch/fetch";
+import { NextRequest, NextResponse } from "next/server";
+import type { Session } from "./lib/auth-types";
+
+export async function proxy(request: NextRequest) {
+	const { pathname } = request.nextUrl;
+
+	// Dashboard requires authentication
+	if (pathname.startsWith("/dashboard")) {
+		const { data: session } = await betterFetch<Session>(
+			"/api/auth/get-session",
+			{
+				baseURL: request.nextUrl.origin,
+				headers: {
+					cookie: request.headers.get("cookie") || "",
+				},
+			},
+		);
+
+		if (!session) {
+			return NextResponse.redirect(new URL("/", request.url));
+		}
+	}
+
+	return NextResponse.next();
+}
+
+export const config = {
+	matcher: ["/dashboard/:path*"],
+};
+`;
+      await writeFile(proxyPath, simplifiedProxy, "utf-8");
+      removedFiles.push("proxy.ts (setup logic)");
+      logMessage("success", "Removed setup redirect from proxy.ts");
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    logMessage("error", "Failed to update proxy.ts", message);
+  }
+
+  logMessage("info", `Cleanup completed: ${removedFiles.length} items removed`);
+
+  return { success: true, data: { removedFiles } };
 }
 
