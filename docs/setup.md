@@ -61,8 +61,8 @@ Both methods configure the same environment variables and produce identical resu
 │          └───────────┬───────────┘                          │
 │                      ▼                                      │
 │          ┌───────────────────────┐                          │
-│          │   Database Setup      │                          │
-│          │   - prisma generate   │                          │
+│          │ Database Migrations   │  ◄── Optional            │
+│          │   - prisma generate   │      (enabled by default)│
 │          │   - prisma db push    │                          │
 │          └───────────┬───────────┘                          │
 │                      ▼                                      │
@@ -71,8 +71,8 @@ Both methods configure the same environment variables and produce identical resu
 │          └───────────┬───────────┘                          │
 │                      ▼                                      │
 │          ┌───────────────────────┐                          │
-│          │   Cleanup (Optional)  │                          │
-│          │   Remove setup files  │                          │
+│          │   Cleanup (Optional)  │  ◄── Optional            │
+│          │   Remove setup files  │      (disabled by default)
 │          └───────────────────────┘                          │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
@@ -216,11 +216,24 @@ Configure any of the following providers:
 
 ### Step 7: Complete
 
-- **Save configuration** to `.env.local`
-- **Run database migrations** (optional but recommended)
-- **Setup Polar meters** (optional, CLI only)
-- **Cleanup setup files** (optional)
-- **Generate setup log**
+The final step presents several options and actions:
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| Run database migrations | Executes `prisma generate` and `prisma db push` | ✅ Enabled |
+| Cleanup setup files | Removes setup wizard files after completion | ❌ Disabled |
+| Setup Polar meters | Creates usage meters in Polar (CLI only) | ❌ Disabled |
+
+**Actions performed:**
+1. **Save configuration** to `.env.local`
+2. **Run database migrations** (if enabled)
+3. **Cleanup setup files** (if enabled)
+4. **Generate setup log** with full details
+
+> **Note:** If you skip migrations, you'll need to run them manually:
+> ```bash
+> npx prisma generate && npx prisma db push
+> ```
 
 ---
 
@@ -229,6 +242,10 @@ Configure any of the following providers:
 Both setup methods generate a detailed `setup.log` file at the project root.
 
 ### Log Contents
+
+The log file format varies depending on your choices. Here are examples:
+
+#### Example: Full Setup with Migrations
 
 ```
 ============================================================
@@ -258,14 +275,6 @@ Timeline
 10:30:08 [INFO]    Running prisma generate
 10:30:12 [INFO]    Running prisma db push
 10:30:14 [SUCCESS] Database migrations completed
-10:30:15 [INFO]    Starting cleanup of setup files
-10:30:15 [SUCCESS] Removed app/setup
-10:30:15 [SUCCESS] Removed components/setup
-10:30:15 [SUCCESS] Removed lib/setup
-10:30:15 [SUCCESS] Removed scripts/setup.ts
-10:30:15 [SUCCESS] Removed setup scripts from package.json
-10:30:15 [SUCCESS] Removed setup redirect from proxy.ts
-10:30:15 [INFO]    Cleanup completed: 6 items removed
 
 ------------------------------------------------------------
 Configuration Summary
@@ -281,14 +290,39 @@ Payments:  ✓ Configured
 
 Database Migrations: ✓ Success
 
+Cleanup:   ○ Skipped
+
+============================================================
+End of Setup Log
+============================================================
+```
+
+#### Example: Skipped Migrations with Cleanup
+
+```
+------------------------------------------------------------
+Configuration Summary
+------------------------------------------------------------
+
+Database:  ✓ Configured
+           Host: db.supabase.co
+Auth:      ✓ Configured
+           URL: http://localhost:3000
+Email:     ✓ Configured
+Payments:  ○ Skipped
+
+Database Migrations: ○ Skipped (manual)
+           Command: npx prisma generate && npx prisma db push
+
 Cleanup:   ✓ Performed
            Removed:
-             - app/setup
              - components/setup
              - lib/setup
              - scripts/setup.ts
              - package.json scripts
              - proxy.ts (setup logic)
+           Manual deletion required:
+             - app/setup
 
 ============================================================
 End of Setup Log
@@ -302,8 +336,16 @@ End of Setup Log
 | Header | Start/end times, duration, and mode (CLI/Web UI) |
 | Timeline | Chronological log of all actions with timestamps |
 | Configuration Summary | What was configured or skipped |
-| Migrations | Database migration status and any errors |
-| Cleanup | List of files removed (if cleanup was performed) |
+| Migrations | Database migration status: `✓ Success`, `○ Skipped (manual)`, or `✗ Failed` |
+| Cleanup | Files removed automatically and files requiring manual deletion |
+
+### Migration Status Values
+
+| Status | Meaning |
+|--------|---------|
+| `✓ Success` | Migrations ran successfully |
+| `○ Skipped (manual)` | User chose to skip migrations - manual command provided |
+| `✗ Failed` | Migrations attempted but failed - error details included |
 
 ---
 
@@ -311,11 +353,12 @@ End of Setup Log
 
 After setup is complete, you can remove the setup wizard files. This is optional but recommended for production deployments or if you want to reduce project size.
 
-### What Gets Removed
+### Automatic Cleanup
+
+The following files are removed **automatically** when cleanup is enabled:
 
 | Path | Description |
 |------|-------------|
-| `app/setup/` | Setup wizard pages |
 | `components/setup/` | Setup UI components |
 | `lib/setup/` | Setup utilities and server actions |
 | `scripts/setup.ts` | CLI setup script |
@@ -323,9 +366,23 @@ After setup is complete, you can remove the setup wizard files. This is optional
 | `package.json` | `setup` and `setup:cli` scripts |
 | `proxy.ts` | Setup redirect logic |
 
+### Manual Cleanup Required
+
+The following requires **manual deletion** after restarting the dev server:
+
+| Path | Description | Why Manual? |
+|------|-------------|-------------|
+| `app/setup/` | Setup wizard pages | Cannot be deleted while you're on that page |
+
+After setup completes, run:
+
+```bash
+rm -rf app/setup
+```
+
 ### Files Preserved
 
-The following are **not** removed:
+The following are **never** removed:
 
 - `.env.local` - Your configuration
 - `setup.log` - Setup log file
@@ -336,12 +393,17 @@ The following are **not** removed:
 **Web UI:**
 
 1. On the final step, check "Remove setup files after completion"
-2. Click "Complete Setup"
+2. Complete setup - automatic files will be removed immediately
+3. After redirecting home, manually delete `app/setup/`:
+   ```bash
+   rm -rf app/setup
+   ```
 
 **CLI:**
 
 1. At the end of setup, you'll be asked: "Would you like to remove setup files and directories?"
 2. Select "Yes" to proceed with cleanup
+3. The CLI can fully clean up all files including `app/setup/` since you're not on the page
 
 ---
 
@@ -508,6 +570,18 @@ All actions are protected with `isSetupAllowed()` which only returns `true` in d
 1. Ensure no processes are using the files
 2. Check file permissions
 3. Manually delete the files if needed
+
+### app/setup Still Exists After Cleanup
+
+**Why:** The `app/setup` directory cannot be deleted while you're viewing the `/setup` page in the browser. This is because Next.js would crash if the page files are deleted while being rendered.
+
+**Solution:** After setup completes and you've navigated away, manually delete the directory:
+
+```bash
+rm -rf app/setup
+```
+
+Or wait until you restart your dev server - the setup page will simply 404 if accessed directly.
 
 ### tsx Command Not Found
 
