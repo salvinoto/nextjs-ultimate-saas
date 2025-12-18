@@ -4,7 +4,7 @@
   "rsc": true,
   "tsx": true,
   "tailwind": {
-    "config": "tailwind.config.ts",
+    "config": "",
     "css": "app/globals.css",
     "baseColor": "neutral",
     "cssVariables": true,
@@ -18,7 +18,7 @@
     "lib": "@/lib",
     "hooks": "@/hooks"
   },
-	"registries": {
-	  "@tailark": "https://tailark.com/r/{name}.json"
-	}
+  "registries": {
+    "@tailark": "https://tailark.com/r/{name}.json"
+  }
 }
